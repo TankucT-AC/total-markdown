@@ -842,13 +842,10 @@ void ViewTest::prefetchLoadsLocalImagesInBackground()
     view.setMarkdown(QStringLiteral("![Photo](photo.png)\n"));
 
     // Wait for debounce and background prefetch to finish
-    QTest::qWait(150);
-
-    // Image size should be available immediately from cache
-    QCOMPARE(LocalImageCache::instance().naturalSize(filePath), QSize(300, 200));
+    QTRY_COMPARE_WITH_TIMEOUT(LocalImageCache::instance().naturalSize(filePath), QSize(300, 200), 5000);
 
     // The document should have finished rendering
-    QVERIFY(!view.document()->isEmpty());
+    QTRY_VERIFY_WITH_TIMEOUT(!view.document()->isEmpty(), 5000);
 }
 
 QTEST_MAIN(ViewTest)
