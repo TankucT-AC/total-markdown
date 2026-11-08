@@ -135,9 +135,13 @@ public:
     // Zero-based source line of the block under a viewport point, or -1 when the
     // point is not over a block the builder could map. Click-to-source.
     int sourceLineAt(const QPoint &viewportPos) const;
+    bool isCheckboxAt(const QPoint &viewportPos) const;
 
 signals:
     void rendered();
+
+    // A click landed on a task-list checkbox in the preview.
+    void taskCheckboxToggled(int line);
 
     // A plain click landed somewhere in the document: the editor should put its
     // caret on this source line. Zed-style "click the preview to edit here".

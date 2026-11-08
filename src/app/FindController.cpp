@@ -30,7 +30,14 @@ FindController::FindController(MarkdownEditor *editor, FindBar *editorBar, Markd
     connect(m_editorBar, &FindBar::closed, this, [this] {
         close(Pane::Editor);
     });
+    connect(m_editorBar, &FindBar::replaceRequested, this, [this](const QString &rep) {
+        replaceCurrent(Pane::Editor, rep);
+    });
+    connect(m_editorBar, &FindBar::replaceAllRequested, this, [this](const QString &rep) {
+        replaceAll(Pane::Editor, rep);
+    });
 
+    m_viewerBar->setReplaceEnabled(false);
     connect(m_viewerBar, &FindBar::queryChanged, this, [this](const QString &query, bool caseSensitive) {
         run(Pane::Viewer, query, caseSensitive);
     });
@@ -127,6 +134,16 @@ FindController::Pane FindController::focusedPane() const
 void FindController::openForFocusedPane()
 {
     show(focusedPane());
+}
+
+void FindController::openReplaceForFocusedPane()
+{
+    show(Pane::Editor);
+    m_editorBar->setReplaceVisible(true);
+    if (!m_editorBar->query().isEmpty())
+        m_editorBar->focusReplaceInput();
+    else
+        m_editorBar->focusInput();
 }
 
 void FindController::findNext()
@@ -253,6 +270,55 @@ void FindController::step(Pane pane, int direction)
 
     apply(pane);
     updateStatus(pane);
+}
+
+void FindController::replaceCurrent(Pane pane, const QString &replacement)
+{
+    if (pane != Pane::Editor)
+        return;
+
+    if (!upToDate(pane)) {
+        run(pane, barOf(pane)->query(), barOf(pane)->caseSensitive());
+    }
+
+    FindState &state = stateOf(pane);
+    if (state.matchCount() == 0 || state.currentIndex() < 0)
+        return;
+
+    const FindState::Match match = state.current();
+    QTextCursor cursor(m_editor->document());
+    cursor.setPosition(match.position);
+    cursor.setPosition(match.position + match.length, QTextCursor::KeepAnchor);
+    cursor.insertText(replacement);
+
+    run(pane, barOf(pane)->query(), barOf(pane)->caseSensitive());
+}
+
+void FindController::replaceAll(Pane pane, const QString &replacement)
+{
+    if (pane != Pane::Editor)
+        return;
+
+    if (!upToDate(pane)) {
+        run(pane, barOf(pane)->query(), barOf(pane)->caseSensitive());
+    }
+
+    FindState &state = stateOf(pane);
+    if (state.matchCount() == 0)
+        return;
+
+    const QVector<FindState::Match> matches = state.matches();
+    QTextCursor cursor(m_editor->document());
+    cursor.beginEditBlock();
+    for (int i = int(matches.size()) - 1; i >= 0; --i) {
+        const FindState::Match &m = matches.at(i);
+        cursor.setPosition(m.position);
+        cursor.setPosition(m.position + m.length, QTextCursor::KeepAnchor);
+        cursor.insertText(replacement);
+    }
+    cursor.endEditBlock();
+
+    run(pane, barOf(pane)->query(), barOf(pane)->caseSensitive());
 }
 
 void FindController::resync(Pane pane)

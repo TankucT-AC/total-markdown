@@ -8,6 +8,7 @@
 #include <QHash>
 #include <QWidget>
 
+class QLineEdit;
 class QTreeWidget;
 class QTreeWidgetItem;
 
@@ -40,7 +41,9 @@ signals:
 private:
     void activate(QTreeWidgetItem *item);
     void rebuildTree();
+    void filterOutline(const QString &query);
 
+    QLineEdit *m_filter = nullptr;
     QTreeWidget *m_tree = nullptr;
     QVector<OutlineEntry> m_entries;
     QHash<int, QTreeWidgetItem *> m_items; // outline index -> row

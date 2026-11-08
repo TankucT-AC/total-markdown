@@ -23,6 +23,10 @@ private slots:
     void highlightingCanBeDetached();
     void gotoSourceLineMovesTheCaretWithoutFocus();
     void currentLineHighlightUsesDedicatedColor();
+    void wordWrapTogglesLineWrapMode();
+    void toggleTaskCheckbox();
+    void smartIndentAndListContinuation();
+    void formattingShortcuts();
 
 private:
     static QTextCharFormat formatAt(const QTextBlock &block, int position);
@@ -186,6 +190,97 @@ void EditorTest::currentLineHighlightUsesDedicatedColor()
     const QList<QTextEdit::ExtraSelection> selections = editor.extraSelections();
     QVERIFY(!selections.isEmpty());
     QCOMPARE(selections.first().format.background().color(), theme.markdown.currentLine);
+}
+
+void EditorTest::wordWrapTogglesLineWrapMode()
+{
+    MarkdownEditor editor;
+    QVERIFY(!editor.wordWrap());
+    QCOMPARE(editor.lineWrapMode(), QPlainTextEdit::NoWrap);
+
+    editor.setWordWrap(true);
+    QVERIFY(editor.wordWrap());
+    QCOMPARE(editor.lineWrapMode(), QPlainTextEdit::WidgetWidth);
+
+    editor.setWordWrap(false);
+    QVERIFY(!editor.wordWrap());
+    QCOMPARE(editor.lineWrapMode(), QPlainTextEdit::NoWrap);
+}
+
+void EditorTest::toggleTaskCheckbox()
+{
+    MarkdownEditor editor;
+    editor.setMarkdown(QStringLiteral("- [ ] first item\n* [x] second item\nregular line\n"));
+
+    // Toggle unchecked to checked on line 0
+    QVERIFY(editor.toggleTaskCheckboxAtSourceLine(0));
+    QCOMPARE(editor.document()->findBlockByLineNumber(0).text(), QStringLiteral("- [x] first item"));
+
+    // Toggle checked to unchecked on line 0
+    QVERIFY(editor.toggleTaskCheckboxAtSourceLine(0));
+    QCOMPARE(editor.document()->findBlockByLineNumber(0).text(), QStringLiteral("- [ ] first item"));
+
+    // Toggle checked to unchecked on line 1
+    QVERIFY(editor.toggleTaskCheckboxAtSourceLine(1));
+    QCOMPARE(editor.document()->findBlockByLineNumber(1).text(), QStringLiteral("* [ ] second item"));
+
+    // Regular line has no checkbox
+    QVERIFY(!editor.toggleTaskCheckboxAtSourceLine(2));
+    // Out of range
+    QVERIFY(!editor.toggleTaskCheckboxAtSourceLine(99));
+    QVERIFY(!editor.toggleTaskCheckboxAtSourceLine(-1));
+}
+
+void EditorTest::smartIndentAndListContinuation()
+{
+    MarkdownEditor editor;
+    editor.setMarkdown(QStringLiteral("- first item"));
+    editor.moveCursor(QTextCursor::End);
+
+    // Press Return on non-empty list item
+    QTest::keyClick(&editor, Qt::Key_Return);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("- first item\n- "));
+
+    // Press Return on empty list item cancels list marker
+    QTest::keyClick(&editor, Qt::Key_Return);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("- first item\n"));
+
+    // Task list continuation
+    editor.setMarkdown(QStringLiteral("- [ ] task 1"));
+    editor.moveCursor(QTextCursor::End);
+    QTest::keyClick(&editor, Qt::Key_Return);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("- [ ] task 1\n- [ ] "));
+
+    // Ordered list continuation
+    editor.setMarkdown(QStringLiteral("1. first"));
+    editor.moveCursor(QTextCursor::End);
+    QTest::keyClick(&editor, Qt::Key_Return);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("1. first\n2. "));
+}
+
+void EditorTest::formattingShortcuts()
+{
+    MarkdownEditor editor;
+    editor.setMarkdown(QStringLiteral("hello world"));
+
+    // Select "world"
+    QTextCursor cursor = editor.textCursor();
+    cursor.setPosition(6);
+    cursor.setPosition(11, QTextCursor::KeepAnchor);
+    editor.setTextCursor(cursor);
+
+    // Ctrl+I toggles italic
+    QTest::keyClick(&editor, Qt::Key_I, Qt::ControlModifier);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("hello *world*"));
+
+    // Heading shortcut Ctrl+2
+    editor.moveCursor(QTextCursor::Start);
+    QTest::keyClick(&editor, Qt::Key_2, Qt::ControlModifier);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("## hello *world*"));
+
+    // Pressing Ctrl+2 again removes heading
+    QTest::keyClick(&editor, Qt::Key_2, Qt::ControlModifier);
+    QCOMPARE(editor.toPlainText(), QStringLiteral("hello *world*"));
 }
 
 QTEST_MAIN(EditorTest)

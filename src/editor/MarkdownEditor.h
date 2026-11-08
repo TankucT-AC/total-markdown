@@ -62,10 +62,17 @@ public:
     // during setPlainText writes to a layout that is discarded afterwards.
     void setMarkdown(const QString &markdown);
 
+    void setWordWrap(bool wrap);
+    bool wordWrap() const;
+
+    // Toggles a task checkbox `- [ ]` <-> `- [x]` on the given 0-based source line.
+    bool toggleTaskCheckboxAtSourceLine(int line);
+
     int lineNumberAreaWidth() const;
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
 
 private slots:
     void updateLineNumberAreaWidth();
@@ -74,6 +81,14 @@ private slots:
 
 private:
     class LineNumberArea;
+
+    bool handleReturnKey(QKeyEvent *event);
+    bool handleTabKey(QKeyEvent *event);
+    bool handleBackspaceKey(QKeyEvent *event);
+    bool handleAutoPair(QKeyEvent *event);
+    bool handleFormatShortcut(QKeyEvent *event);
+    void moveCurrentLines(int direction);
+    void toggleHeadingLevel(int level);
 
     void lineNumberAreaPaintEvent(QPaintEvent *event);
 
