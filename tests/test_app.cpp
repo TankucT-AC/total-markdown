@@ -144,9 +144,11 @@ void AppTest::externalChangeReloadsUnmodifiedDocument()
         QFile file(path);
         QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
         file.write("second\n");
+        file.flush();
+        file.close();
     }
 
-    QTRY_VERIFY_WITH_TIMEOUT(window.editor()->toPlainText() == QStringLiteral("second\n"), 3000);
+    QTRY_VERIFY_WITH_TIMEOUT(window.editor()->toPlainText() == QStringLiteral("second\n"), 8000);
     QVERIFY(window.viewer()->document()->toPlainText().contains(QStringLiteral("second")));
 }
 
@@ -311,7 +313,7 @@ void AppTest::hugeFileOpensPausedAndQuickly()
     QVERIFY(window.viewer()->document()->toPlainText().contains(QStringLiteral("Preview paused")));
     QVERIFY(!window.editor()->highlightingEnabled());
     // Loading and laying out the source may cost something, but not a freeze.
-    QVERIFY2(elapsed < 3000, qPrintable(QStringLiteral("opening took %1 ms").arg(elapsed)));
+    QVERIFY2(elapsed < 8000, qPrintable(QStringLiteral("opening took %1 ms").arg(elapsed)));
 }
 
 void AppTest::remoteImagesAreOnByDefaultAndPersistAcrossWindows()

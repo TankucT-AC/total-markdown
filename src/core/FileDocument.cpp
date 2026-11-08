@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QThread>
 
 FileDocument::FileDocument(QObject *parent)
     : QObject(parent)
@@ -106,7 +107,15 @@ void FileDocument::handleFileChanged()
 void FileDocument::handleDirectoryChanged()
 {
     QFile file(m_path);
-    if (!file.open(QIODevice::ReadOnly)) {
+    bool opened = file.open(QIODevice::ReadOnly);
+    // On Windows, the file might still be briefly held by the external writer
+    // when the directory change notification fires. Retry for up to 100 ms.
+    for (int retry = 0; !opened && retry < 5; ++retry) {
+        QThread::msleep(20);
+        opened = file.open(QIODevice::ReadOnly);
+    }
+
+    if (!opened) {
         // The file is gone (deleted or being atomically replaced).
         rearmWatch();
         emit externallyChanged();
@@ -114,6 +123,7 @@ void FileDocument::handleDirectoryChanged()
     }
 
     const QString content = QString::fromUtf8(file.readAll());
+    file.close();
     rearmWatch();
 
     if (m_saving || content == m_content)
