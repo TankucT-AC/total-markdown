@@ -111,11 +111,14 @@ install(TARGETS total-markdown
 # needed on the target. Native distro packages turn this off; they depend on
 # the system KF6 and must not ship a second copy of the engine.
 if(MMD_BUNDLE_KSYNTAX AND UNIX AND NOT APPLE)
-install(FILES $<TARGET_FILE:KF6::SyntaxHighlighting>
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/total-markdown
-    RENAME libKF6SyntaxHighlighting.so.6)
-set_target_properties(total-markdown PROPERTIES
-    INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}/total-markdown")
+    get_target_property(_kf6_type KF6::SyntaxHighlighting TYPE)
+    if(_kf6_type STREQUAL "SHARED_LIBRARY")
+        install(FILES $<TARGET_FILE:KF6::SyntaxHighlighting>
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/total-markdown
+            RENAME libKF6SyntaxHighlighting.so.6)
+        set_target_properties(total-markdown PROPERTIES
+            INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}/total-markdown")
+    endif()
 elseif(UNIX AND NOT APPLE)
 # qt_standard_project_setup() leaves a default install RUNPATH pointing at a
 # lib/ next to the binary; a distro package owns no such directory, so the
