@@ -41,10 +41,22 @@ public:
     bool caseSensitive() const;
     void clearQuery();
 
+    void setReplaceEnabled(bool enabled);
+    bool replaceEnabled() const;
+
+    void setReplaceVisible(bool visible);
+    bool isReplaceVisible() const;
+
+    void focusReplaceInput();
+    QString replacementText() const;
+    void setReplacementText(const QString &text);
+
 signals:
     void queryChanged(const QString &query, bool caseSensitive);
     void findNextRequested();
     void findPreviousRequested();
+    void replaceRequested(const QString &replacement);
+    void replaceAllRequested(const QString &replacement);
     void closed();
 
 protected:
@@ -56,7 +68,14 @@ private:
 
     QLineEdit *m_input = nullptr;
     QLabel *m_status = nullptr;
+    QToolButton *m_toggleReplace = nullptr;
     QToolButton *m_previous = nullptr;
     QToolButton *m_next = nullptr;
     QToolButton *m_case = nullptr;
+
+    QWidget *m_replaceRow = nullptr;
+    QLineEdit *m_replaceInput = nullptr;
+    QToolButton *m_replaceNext = nullptr;
+    QToolButton *m_replaceAll = nullptr;
+    bool m_replaceEnabled = true;
 };

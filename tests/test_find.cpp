@@ -31,6 +31,8 @@ private slots:
     void previewHighlightsEveryMatch();
     void findBarDrivesTheController();
     void pausedPreviewReportsItself();
+    void replaceCurrentReplacesSingleMatch();
+    void replaceAllReplacesAllMatches();
 };
 
 void FindTest::findsEveryOccurrence()
@@ -249,6 +251,42 @@ void FindTest::pausedPreviewReportsItself()
     // "no results" would be a lie: the document was never rendered.
     QCOMPARE(viewerBar.status(), QStringLiteral("preview paused"));
     QVERIFY(viewer.extraSelections().isEmpty());
+}
+
+void FindTest::replaceCurrentReplacesSingleMatch()
+{
+    MarkdownEditor editor;
+    FindBar editorBar;
+    MarkdownView viewer;
+    FindBar viewerBar;
+    FindController controller(&editor, &editorBar, &viewer, &viewerBar);
+
+    editor.setMarkdown(QStringLiteral("one two one three"));
+    editorBar.show();
+    editorBar.setQuery(QStringLiteral("one"));
+    QCOMPARE(editorBar.status(), QStringLiteral("1 of 2"));
+
+    emit editorBar.replaceRequested(QStringLiteral("TEN"));
+    QCOMPARE(editor.toPlainText(), QStringLiteral("TEN two one three"));
+    QCOMPARE(editorBar.status(), QStringLiteral("1 of 1"));
+}
+
+void FindTest::replaceAllReplacesAllMatches()
+{
+    MarkdownEditor editor;
+    FindBar editorBar;
+    MarkdownView viewer;
+    FindBar viewerBar;
+    FindController controller(&editor, &editorBar, &viewer, &viewerBar);
+
+    editor.setMarkdown(QStringLiteral("one two one three one"));
+    editorBar.show();
+    editorBar.setQuery(QStringLiteral("one"));
+    QCOMPARE(editorBar.status(), QStringLiteral("1 of 3"));
+
+    emit editorBar.replaceAllRequested(QStringLiteral("ALL"));
+    QCOMPARE(editor.toPlainText(), QStringLiteral("ALL two ALL three ALL"));
+    QCOMPARE(editorBar.status(), QStringLiteral("no results"));
 }
 
 QTEST_MAIN(FindTest)

@@ -35,10 +35,15 @@ constexpr int kPadding = 4;
 // not produce -- rather than a legitimate empty formula.
 bool hasInk(const QImage &bitmap)
 {
-    for (int y = 0; y < bitmap.height(); ++y)
-        for (int x = 0; x < bitmap.width(); ++x)
-            if (qAlpha(bitmap.pixel(x, y)) > 0)
+    const int height = bitmap.height();
+    const int width = bitmap.width();
+    for (int y = 0; y < height; ++y) {
+        const auto *line = reinterpret_cast<const QRgb *>(bitmap.constScanLine(y));
+        for (int x = 0; x < width; ++x) {
+            if (qAlpha(line[x]) > 0)
                 return true;
+        }
+    }
     return false;
 }
 

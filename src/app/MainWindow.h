@@ -63,6 +63,7 @@ public:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    void changeEvent(QEvent *event) override;
 
 private:
     void buildUi();
@@ -81,6 +82,16 @@ private:
 
     void updateStatusBar();
     void updateRenderStatus();
+    void updateCursorStatus();
+    void updateDocStats();
+    void toggleWordWrap(bool wrap);
+    void restoreWordWrapSettings();
+    void updateRecentFilesMenu();
+    void addRecentFile(const QString &path);
+    void clearRecentFiles();
+    void zoomIn();
+    void zoomOut();
+    void resetZoom();
 
     void openFolderDialog();
     void setFolder(const QString &path);
@@ -115,10 +126,17 @@ private:
     FileDocument *m_file = nullptr;
     ThemeManager *m_themes = nullptr;
     DocumentLimits m_limits;
+    bool m_loading = false;
+    QMenu *m_recentFilesMenu = nullptr;
     QLabel *m_statusInfo = nullptr;
+    QLabel *m_statusCursor = nullptr;
+    QLabel *m_statusStats = nullptr;
+    QLabel *m_statusWrap = nullptr;
     QLabel *m_statusRender = nullptr;
     QAction *m_toggleEditor = nullptr;
     QAction *m_toggleViewer = nullptr;
+    QAction *m_toggleWordWrap = nullptr;
+    QAction *m_fullScreenAction = nullptr;
     QAction *m_toggleRemoteImages = nullptr;
     QAction *m_customThemeAction = nullptr;
     QHash<int, QAction *> m_themeModeActions;

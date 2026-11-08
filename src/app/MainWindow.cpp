@@ -89,8 +89,11 @@ MainWindow::MainWindow(QWidget *parent)
     applyTheme(m_themes->currentTheme());
     restoreThemeSettings();
     restoreFontSettings();
+    restoreWordWrapSettings();
     setFolder(QSettings().value(QStringLiteral("files/folder")).toString());
     updateWindowTitle();
+    updateCursorStatus();
+    updateDocStats();
     resize(1200, 800);
 }
 
@@ -170,12 +173,38 @@ void MainWindow::buildUi()
     m_find = new FindController(m_editor, m_editorBar, m_viewer, m_viewerBar, this);
 
     m_statusInfo = new QLabel(this);
+    m_statusCursor = new QLabel(this);
+    m_statusStats = new QLabel(this);
+    m_statusWrap = new QLabel(this);
     m_statusRender = new QLabel(this);
+
     statusBar()->addWidget(m_statusInfo);
+    statusBar()->addWidget(m_statusCursor);
+    statusBar()->addWidget(m_statusStats);
+    statusBar()->addWidget(m_statusWrap);
     statusBar()->addPermanentWidget(m_statusRender);
 
     connect(m_editor, &QPlainTextEdit::textChanged, this, [this] {
-        m_viewer->setMarkdown(m_editor->toPlainText());
+        if (m_loading)
+            return;
+        const QString text = m_editor->toPlainText();
+        const qint64 sizeBytes = text.toUtf8().size();
+        const DocumentLimits limits = DocumentLimits::forSize(sizeBytes);
+        const bool tierChanged = (limits.tier() != m_limits.tier());
+        m_limits = limits;
+        if (tierChanged) {
+            m_viewer->setDocumentLimits(m_limits);
+            m_editor->setDocumentLimits(m_limits);
+        }
+        updateStatusBar();
+        updateDocStats();
+        m_viewer->setMarkdown(text);
+    });
+    connect(m_editor, &QPlainTextEdit::cursorPositionChanged, this, [this] {
+        if (m_loading)
+            return;
+        updateCursorStatus();
+        updateDocStats();
     });
     connect(m_splitter, &QSplitter::splitterMoved, this, [this] {
         m_viewer->scheduleRerender();
@@ -187,6 +216,7 @@ void MainWindow::buildUi()
     // purpose: rendered and source heights do not line up, so keeping them in
     // step by scroll fraction only ever disagrees with the reader.
     connect(m_viewer, &MarkdownView::sourceLineActivated, m_editor, &MarkdownEditor::gotoSourceLine);
+    connect(m_viewer, &MarkdownView::taskCheckboxToggled, m_editor, &MarkdownEditor::toggleTaskCheckboxAtSourceLine);
 
     buildSidebar();
 
@@ -235,6 +265,8 @@ void MainWindow::buildMenus()
     fileMenu->addAction(tr("&New"), QKeySequence::New, this, &MainWindow::newFile);
     fileMenu->addAction(tr("&Open…"), QKeySequence::Open, this, &MainWindow::openFileDialog);
     fileMenu->addAction(tr("Open F&older…"), QKeySequence(QStringLiteral("Ctrl+Shift+O")), this, &MainWindow::openFolderDialog);
+    m_recentFilesMenu = fileMenu->addMenu(tr("Open &Recent"));
+    updateRecentFilesMenu();
     fileMenu->addAction(tr("&Save"), QKeySequence::Save, this, &MainWindow::saveFile);
     fileMenu->addAction(tr("Save &As…"), QKeySequence::SaveAs, this, &MainWindow::saveFileAs);
     fileMenu->addSeparator();
@@ -243,6 +275,9 @@ void MainWindow::buildMenus()
     QMenu *editMenu = menuBar()->addMenu(tr("&Edit"));
     editMenu->addAction(tr("&Find…"), QKeySequence::Find, this, [this] {
         m_find->openForFocusedPane();
+    });
+    editMenu->addAction(tr("&Replace…"), QKeySequence::Replace, this, [this] {
+        m_find->openReplaceForFocusedPane();
     });
     editMenu->addAction(tr("Find &Next"), QKeySequence(QStringLiteral("F3")), this, [this] {
         m_find->findNext();
@@ -278,6 +313,12 @@ void MainWindow::buildMenus()
         persistPaneSettings();
     });
 
+    m_toggleWordWrap = viewMenu->addAction(tr("&Word Wrap"), this, [this](bool checked) {
+        toggleWordWrap(checked);
+    });
+    m_toggleWordWrap->setCheckable(true);
+    m_toggleWordWrap->setShortcut(QKeySequence(QStringLiteral("Alt+Z")));
+
     restorePaneSettings();
 
     m_toggleRemoteImages = viewMenu->addAction(tr("Load &Remote Images"));
@@ -288,6 +329,23 @@ void MainWindow::buildMenus()
         m_viewer->setRemoteImagesEnabled(checked);
     });
     restoreRemoteImageSettings();
+
+    viewMenu->addSeparator();
+    QAction *zoomInAction = viewMenu->addAction(tr("Zoom &In"), this, &MainWindow::zoomIn);
+    zoomInAction->setShortcut(QKeySequence::ZoomIn);
+    QAction *zoomOutAction = viewMenu->addAction(tr("Zoom &Out"), this, &MainWindow::zoomOut);
+    zoomOutAction->setShortcut(QKeySequence::ZoomOut);
+    QAction *resetZoomAction = viewMenu->addAction(tr("Reset &Zoom"), this, &MainWindow::resetZoom);
+    resetZoomAction->setShortcut(QKeySequence(QStringLiteral("Ctrl+0")));
+
+    m_fullScreenAction = viewMenu->addAction(tr("&Full Screen"), this, [this] {
+        if (isFullScreen())
+            showNormal();
+        else
+            showFullScreen();
+    });
+    m_fullScreenAction->setCheckable(true);
+    m_fullScreenAction->setShortcut(QKeySequence(QStringLiteral("F11")));
 
     QMenu *themeMenu = viewMenu->addMenu(tr("&Theme"));
     auto *group = new QActionGroup(this);
@@ -352,7 +410,15 @@ void MainWindow::applyTheme(const ThemeDefinition &theme)
     // The dock separator is a thick bevel by default; a hairline keeps the
     // sidebar and the editor reading as two flat panes. The sidebar's own title
     // bar follows the palette on its own.
-    setStyleSheet(QStringLiteral("QMainWindow::separator { background: %1; width: 1px; height: 1px; }").arg(theme.markdown.rule.name()));
+    setStyleSheet(QStringLiteral("QMainWindow::separator { background: %1; width: 1px; height: 1px; }"
+                                 "QTabBar::tab { padding: 5px 12px; border: none; background: transparent; color: %2; }"
+                                 "QTabBar::tab:selected { border-bottom: 2px solid %3; font-weight: bold; color: %4; }"
+                                 "QStatusBar { border-top: 1px solid %1; }"
+                                 "QStatusBar QLabel { padding: 0 4px; }")
+                      .arg(theme.markdown.rule.name(),
+                           theme.markdown.weakText.name(),
+                           theme.palette.color(QPalette::Highlight).name(),
+                           theme.palette.color(QPalette::WindowText).name()));
 
     m_editor->setTheme(theme);
 
@@ -363,6 +429,8 @@ void MainWindow::applyTheme(const ThemeDefinition &theme)
 
 void MainWindow::applyFileContent(const QString &content, const QString &path)
 {
+    m_loading = true;
+
     // Whatever was being searched for is now at different offsets, in a
     // different file.
     m_find->reset();
@@ -382,7 +450,11 @@ void MainWindow::applyFileContent(const QString &content, const QString &path)
     m_viewer->renderNow();
     m_filesPanel->setCurrentFile(path);
     updateStatusBar();
+    updateCursorStatus();
+    updateDocStats();
     updateWindowTitle();
+
+    m_loading = false;
 }
 
 void MainWindow::updateStatusBar()
@@ -399,6 +471,137 @@ void MainWindow::updateStatusBar()
         m_statusInfo->setText(tr("%1 · preview paused: too large to redraw while typing").arg(size));
         break;
     }
+}
+
+void MainWindow::updateCursorStatus()
+{
+    if (!m_statusCursor)
+        return;
+    const QTextCursor cursor = m_editor->textCursor();
+    const int line = cursor.blockNumber() + 1;
+    const int col = cursor.positionInBlock() + 1;
+    m_statusCursor->setText(tr("Ln %1, Col %2").arg(line).arg(col));
+}
+
+void MainWindow::updateDocStats()
+{
+    if (!m_statusStats)
+        return;
+    const QString text = m_editor->toPlainText();
+    const int charCount = int(text.length());
+    int wordCount = 0;
+    bool inWord = false;
+    for (const QChar &ch : text) {
+        if (ch.isSpace()) {
+            inWord = false;
+        } else if (!inWord) {
+            inWord = true;
+            ++wordCount;
+        }
+    }
+    const QTextCursor cursor = m_editor->textCursor();
+    if (cursor.hasSelection()) {
+        const int selChars = int(cursor.selectedText().length());
+        m_statusStats->setText(tr("%1 words · %2 chars (%3 sel)").arg(wordCount).arg(charCount).arg(selChars));
+    } else {
+        m_statusStats->setText(tr("%1 words · %2 chars").arg(wordCount).arg(charCount));
+    }
+}
+
+void MainWindow::toggleWordWrap(bool wrap)
+{
+    m_editor->setWordWrap(wrap);
+    QSettings().setValue(QStringLiteral("editor/wordWrap"), wrap);
+    if (m_statusWrap)
+        m_statusWrap->setText(wrap ? tr("Wrap: On") : tr("Wrap: Off"));
+}
+
+void MainWindow::restoreWordWrapSettings()
+{
+    const bool wrap = QSettings().value(QStringLiteral("editor/wordWrap"), false).toBool();
+    if (m_toggleWordWrap)
+        m_toggleWordWrap->setChecked(wrap);
+    m_editor->setWordWrap(wrap);
+    if (m_statusWrap)
+        m_statusWrap->setText(wrap ? tr("Wrap: On") : tr("Wrap: Off"));
+}
+
+void MainWindow::zoomIn()
+{
+    m_editor->zoomIn(1);
+    m_viewer->zoomIn(1);
+}
+
+void MainWindow::zoomOut()
+{
+    m_editor->zoomOut(1);
+    m_viewer->zoomOut(1);
+}
+
+void MainWindow::resetZoom()
+{
+    const QString body = QSettings().value(QStringLiteral("fonts/bodyFamily")).toString();
+    const QString code = QSettings().value(QStringLiteral("fonts/codeFamily")).toString();
+    applyFontChoice(body, code);
+}
+
+void MainWindow::changeEvent(QEvent *event)
+{
+    if (event->type() == QEvent::WindowStateChange) {
+        if (m_fullScreenAction)
+            m_fullScreenAction->setChecked(isFullScreen());
+    }
+    QMainWindow::changeEvent(event);
+}
+
+void MainWindow::updateRecentFilesMenu()
+{
+    if (!m_recentFilesMenu)
+        return;
+
+    m_recentFilesMenu->clear();
+    const QStringList recent = QSettings().value(QStringLiteral("history/recentFiles")).toStringList();
+    int count = 0;
+    for (const QString &path : recent) {
+        if (!QFileInfo::exists(path))
+            continue;
+        const QString text = QFileInfo(path).fileName() + QStringLiteral(" (") + QDir::toNativeSeparators(path) + QStringLiteral(")");
+        QAction *action = m_recentFilesMenu->addAction(text, this, [this, path] {
+            if (maybeSave())
+                openFile(path);
+        });
+        action->setData(path);
+        ++count;
+    }
+
+    if (count == 0) {
+        QAction *emptyAction = m_recentFilesMenu->addAction(tr("No Recent Files"));
+        emptyAction->setEnabled(false);
+    } else {
+        m_recentFilesMenu->addSeparator();
+        m_recentFilesMenu->addAction(tr("Clear Recent Files"), this, &MainWindow::clearRecentFiles);
+    }
+}
+
+void MainWindow::addRecentFile(const QString &path)
+{
+    if (path.isEmpty())
+        return;
+
+    const QString clean = QDir::cleanPath(path);
+    QStringList recent = QSettings().value(QStringLiteral("history/recentFiles")).toStringList();
+    recent.removeAll(clean);
+    recent.prepend(clean);
+    while (recent.size() > 10)
+        recent.removeLast();
+    QSettings().setValue(QStringLiteral("history/recentFiles"), recent);
+    updateRecentFilesMenu();
+}
+
+void MainWindow::clearRecentFiles()
+{
+    QSettings().remove(QStringLiteral("history/recentFiles"));
+    updateRecentFilesMenu();
 }
 
 void MainWindow::updateRenderStatus()
@@ -477,6 +680,7 @@ bool MainWindow::openFile(const QString &path)
         return false;
     }
     applyFileContent(m_file->content(), m_file->filePath());
+    addRecentFile(m_file->filePath());
     return true;
 }
 
@@ -527,6 +731,7 @@ bool MainWindow::saveFile()
     }
     m_editor->document()->setModified(false);
     updateWindowTitle();
+    addRecentFile(m_file->filePath());
     return true;
 }
 
@@ -544,6 +749,7 @@ bool MainWindow::saveFileAs()
     m_editor->document()->setModified(false);
     m_viewer->setBaseDir(QFileInfo(path).absolutePath());
     updateWindowTitle();
+    addRecentFile(path);
     return true;
 }
 

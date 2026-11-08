@@ -453,8 +453,13 @@ int MarkdownView::effectiveRenderInterval() const
     // The interval configured by the caller is the floor; a degraded document
     // may ask for a longer one, so typing costs at most one render per interval
     // instead of one per keystroke.
-    if (!m_limits.degraded())
-        return m_renderTimer->interval();
+    if (!m_limits.degraded()) {
+        const int baseInterval = m_renderTimer->interval();
+        if (baseInterval == 0)
+            return 0;
+        // Adapt debounce to render duration so heavy documents do not starve the GUI thread.
+        return (std::max)(baseInterval, (std::min)(350, int(m_lastRenderMs * 1.5)));
+    }
     return (std::max)(m_renderTimer->interval(), m_limits.renderIntervalMs());
 }
 
@@ -782,6 +787,8 @@ void MarkdownView::updateHoveredFrame(const QPoint &pos)
 void MarkdownView::mouseMoveEvent(QMouseEvent *event)
 {
     updateHoveredFrame(event->pos());
+    if (isCheckboxAt(event->pos()))
+        viewport()->setCursor(Qt::PointingHandCursor);
     QTextBrowser::mouseMoveEvent(event);
 }
 
@@ -807,11 +814,34 @@ void MarkdownView::mouseReleaseEvent(QMouseEvent *event)
     if (event->button() == Qt::LeftButton && hadPress && anchorAt(event->pos()).isEmpty()
         && (event->pos() - pressedAt).manhattanLength() <= QApplication::startDragDistance()) {
         const int line = sourceLineAt(event->pos());
-        if (line >= 0)
+        if (isCheckboxAt(event->pos()) && line >= 0) {
+            emit taskCheckboxToggled(line);
+        } else if (line >= 0) {
             emit sourceLineActivated(line);
+        }
     }
 
     QTextBrowser::mouseReleaseEvent(event);
+}
+
+bool MarkdownView::isCheckboxAt(const QPoint &viewportPos) const
+{
+    const QTextCursor cursor = cursorForPosition(viewportPos);
+    const QTextBlock block = cursor.block();
+    if (!block.isValid())
+        return false;
+
+    for (QTextBlock::iterator it = block.begin(); !it.atEnd(); ++it) {
+        const QTextCharFormat fmt = it.fragment().charFormat();
+        if (fmt.objectType() == MarkdownBuilder::checkboxObjectType) {
+            const int fragStart = it.fragment().position() - block.position();
+            const int posInBlock = cursor.positionInBlock();
+            if (posInBlock >= fragStart && posInBlock <= fragStart + 2)
+                return true;
+            break;
+        }
+    }
+    return false;
 }
 
 int MarkdownView::sourceLineAt(const QPoint &viewportPos) const

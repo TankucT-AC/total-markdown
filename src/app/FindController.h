@@ -28,6 +28,9 @@ public:
     // Ctrl+F: the bar of the pane that has the keyboard focus.
     void openForFocusedPane();
 
+    // Ctrl+H: the bar with replace mode opened.
+    void openReplaceForFocusedPane();
+
     // F3 and Shift+F3. Both open the bar when it is closed, so a shortcut the
     // user remembers keeps working.
     void findNext();
@@ -59,6 +62,8 @@ private:
     void close(Pane pane);
     void run(Pane pane, const QString &query, bool caseSensitive);
     void step(Pane pane, int direction);
+    void replaceCurrent(Pane pane, const QString &replacement);
+    void replaceAll(Pane pane, const QString &replacement);
     void resync(Pane pane);
     void apply(Pane pane);
     void updateStatus(Pane pane);
