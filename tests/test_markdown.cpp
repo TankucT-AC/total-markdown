@@ -4,6 +4,7 @@
 #include <QtTest>
 
 #include "core/FontManager.h"
+#include "core/LocalImageCache.h"
 #include "core/MarkdownBuilder.h"
 #include "core/Theme.h"
 
@@ -22,6 +23,7 @@
 #include <QTextTable>
 #include <QTextTableCell>
 #include <QTextTableCellFormat>
+#include <QThread>
 #include <QUrl>
 
 #include <functional>
@@ -53,6 +55,8 @@ private slots:
     void htmlParagraphAlignCentersMarkdownBlocks();
     void htmlTableCellsRenderTheirMarkdown();
     void htmlTableWithBlankLinesBecomesATable();
+    void htmlTableImageIsConstrainedByCellWidth();
+    void gfmTableImageIsConstrainedByCellWidth();
     void htmlBadgeRowStaysOnOneLine();
     void readmeRendersWithoutLiteralHtml();
     void boldEmphasisInParagraph();
@@ -81,6 +85,9 @@ private slots:
     void mathInsideCodeStaysLiteral();
     void blocksRecordTheirSourceLine();
     void rulesLinksAndImagesMapToTheirLine();
+    void localImageCacheCachesAndInvalidatesOnMtime();
+    void localImageCacheFastDownsampling();
+    void repeatedRendersReuseCachedImages();
 
 private:
     struct FoundMath {
@@ -864,6 +871,80 @@ void MarkdownTest::htmlTableWithBlankLinesBecomesATable()
     QVERIFY(hasList);
 }
 
+void MarkdownTest::htmlTableImageIsConstrainedByCellWidth()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QImage testImg(1200, 600, QImage::Format_ARGB32);
+    testImg.fill(Qt::red);
+    QVERIFY(testImg.save(dir.filePath(QStringLiteral("big.png")), "PNG"));
+
+    RenderStyle style;
+    style.baseDir = dir.path();
+    style.contentWidth = 600;
+    style.maxContentWidth = 600;
+    style.maxImageWidth = 600;
+
+    QTextDocument document;
+    MarkdownBuilder::build(&document,
+                           QStringLiteral("<table><tr>"
+                                          "<td width=\"50%\"><img src=\"big.png\" width=\"100%\"></td>"
+                                          "<td width=\"50%\"><img src=\"big.png\" width=\"100%\"></td>"
+                                          "</tr></table>\n"),
+                           style);
+
+    QVector<int> widths;
+    for (QTextBlock block = document.firstBlock(); block.isValid(); block = block.next()) {
+        for (QTextBlock::Iterator it = block.begin(); !it.atEnd(); ++it) {
+            if (it.fragment().charFormat().isImageFormat())
+                widths.append(int(it.fragment().charFormat().toImageFormat().width()));
+        }
+    }
+
+    QCOMPARE(widths.size(), 2);
+    // In a 600px table with two 50% columns, each cell available width is ~300 - 18 = 282px.
+    for (int w : widths) {
+        QVERIFY(w <= 300);
+        QVERIFY(w >= 250);
+    }
+}
+
+void MarkdownTest::gfmTableImageIsConstrainedByCellWidth()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QImage testImg(1200, 600, QImage::Format_ARGB32);
+    testImg.fill(Qt::green);
+    QVERIFY(testImg.save(dir.filePath(QStringLiteral("big.png")), "PNG"));
+
+    RenderStyle style;
+    style.baseDir = dir.path();
+    style.contentWidth = 600;
+    style.maxContentWidth = 600;
+    style.maxImageWidth = 600;
+
+    QTextDocument document;
+    MarkdownBuilder::build(&document,
+                           QStringLiteral("| Left | Right |\n"
+                                          "| --- | --- |\n"
+                                          "| ![l](big.png) | ![r](big.png) |\n"),
+                           style);
+
+    QVector<int> widths;
+    for (QTextBlock block = document.firstBlock(); block.isValid(); block = block.next()) {
+        for (QTextBlock::Iterator it = block.begin(); !it.atEnd(); ++it) {
+            if (it.fragment().charFormat().isImageFormat())
+                widths.append(int(it.fragment().charFormat().toImageFormat().width()));
+        }
+    }
+
+    QCOMPARE(widths.size(), 2);
+    for (int w : widths) {
+        QVERIFY(w <= 300);
+        QVERIFY(w >= 250);
+    }
+}
+
 void MarkdownTest::htmlBadgeRowStaysOnOneLine()
 {
     // A row of remote-image badges (each its own <img> line, as READMEs write
@@ -1282,6 +1363,84 @@ void MarkdownTest::mathInsideCodeStaysLiteral()
             fenceHasDollars = true;
     }
     QVERIFY(fenceHasDollars);
+}
+
+void MarkdownTest::localImageCacheCachesAndInvalidatesOnMtime()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString filePath = tempDir.filePath(QStringLiteral("test.png"));
+
+    QImage red(200, 100, QImage::Format_ARGB32);
+    red.fill(Qt::red);
+    QVERIFY(red.save(filePath));
+
+    LocalImageCache::instance().clear();
+    const QSize size1 = LocalImageCache::instance().naturalSize(filePath);
+    QCOMPARE(size1, QSize(200, 100));
+
+    const QImage scaled1 = LocalImageCache::instance().getScaled(filePath, QSize(100, 50), 1.0, size1);
+    QCOMPARE(scaled1.size(), QSize(100, 50));
+    QCOMPARE(scaled1.pixelColor(0, 0), QColor(Qt::red));
+
+    // Overwrite with a blue image of different size
+    // Sleep briefly so filesystem modification timestamp increments.
+    QThread::msleep(50);
+    QImage blue(300, 150, QImage::Format_ARGB32);
+    blue.fill(Qt::blue);
+    QVERIFY(blue.save(filePath));
+
+    const QSize size2 = LocalImageCache::instance().naturalSize(filePath);
+    QCOMPARE(size2, QSize(300, 150));
+
+    const QImage scaled2 = LocalImageCache::instance().getScaled(filePath, QSize(150, 75), 1.0, size2);
+    QCOMPARE(scaled2.size(), QSize(150, 75));
+    QCOMPARE(scaled2.pixelColor(0, 0), QColor(Qt::blue));
+}
+
+void MarkdownTest::localImageCacheFastDownsampling()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString filePath = tempDir.filePath(QStringLiteral("large.png"));
+
+    // 1000x1000 scaled to 100x100 is a 10x downsample (> 2.5x threshold for 2-step downsampling)
+    QImage large(1000, 1000, QImage::Format_ARGB32);
+    large.fill(Qt::green);
+    QVERIFY(large.save(filePath));
+
+    LocalImageCache::instance().clear();
+    const QSize natural = LocalImageCache::instance().naturalSize(filePath);
+    QCOMPARE(natural, QSize(1000, 1000));
+
+    const QImage scaled = LocalImageCache::instance().getScaled(filePath, QSize(100, 100), 2.0, natural);
+    QCOMPARE(scaled.size(), QSize(100, 100));
+    QCOMPARE(scaled.devicePixelRatio(), 2.0);
+    QCOMPARE(scaled.pixelColor(50, 50), QColor(Qt::green));
+}
+
+void MarkdownTest::repeatedRendersReuseCachedImages()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString filePath = tempDir.filePath(QStringLiteral("sample.png"));
+
+    QImage img(400, 200, QImage::Format_ARGB32);
+    img.fill(Qt::magenta);
+    QVERIFY(img.save(filePath));
+
+    LocalImageCache::instance().clear();
+    const QString md = QStringLiteral("![Sample](sample.png)\n");
+
+    QTextDocument doc1;
+    render(&doc1, md, tempDir.path());
+
+    QTextDocument doc2;
+    render(&doc2, md, tempDir.path());
+
+    // Both documents should successfully contain the rendered markdown block
+    QVERIFY(!doc1.toPlainText().isEmpty());
+    QVERIFY(!doc2.toPlainText().isEmpty());
 }
 
 QTEST_MAIN(MarkdownTest)

@@ -5,6 +5,7 @@
 
 #include "core/HtmlFragment.h"
 #include "core/ImageResolver.h"
+#include "core/LocalImageCache.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -202,6 +203,7 @@ private:
         SpanFormatState spans;
         QString linkHref;
         bool firstBlock = true;
+        RenderStyle style;
     };
 
     struct FrameContext {
@@ -852,6 +854,7 @@ int Builder::enterBlock(MD_BLOCKTYPE type, void *detail)
         saved.spans = m_span;
         saved.linkHref = m_linkHref;
         saved.firstBlock = m_firstBlock;
+        saved.style = m_style;
         m_cellStack.push(saved);
 
         Cell cell;
@@ -874,6 +877,14 @@ int Builder::enterBlock(MD_BLOCKTYPE type, void *detail)
         m_firstBlock = true;
         m_span = SpanFormatState{};
         m_linkHref.clear();
+
+        const int totalTableWidth = m_style.contentWidth > 0 ? m_style.contentWidth : m_style.maxContentWidth;
+        const unsigned cols = (std::max)(1u, m_table->columns);
+        const int cellAvailableWidth = (std::max)(40, qRound(qreal(totalTableWidth) / qreal(cols)) - (8 * 2 + 2));
+        m_style.contentWidth = cellAvailableWidth;
+        m_style.maxContentWidth = cellAvailableWidth;
+        m_style.maxImageWidth = cellAvailableWidth;
+
         setPendingBlock(paragraphFormat(), bodyCharFormat(), false);
         break;
     }
@@ -945,6 +956,7 @@ int Builder::leaveBlock(MD_BLOCKTYPE type, void *detail)
         m_span = saved.spans;
         m_linkHref = saved.linkHref;
         m_firstBlock = saved.firstBlock;
+        m_style = saved.style;
         break;
     }
     default:
@@ -1306,7 +1318,7 @@ void Builder::insertImageElement(const QString &source, const QString &alt, Html
         natural = renderer.defaultSize();
     }
     if (!natural.isValid())
-        natural = QImageReader(path).size();
+        natural = LocalImageCache::instance().naturalSize(path);
 
     QSize display = natural;
     if (natural.isValid() && natural.width() > 0) {
@@ -1342,24 +1354,20 @@ void Builder::insertImageElement(const QString &source, const QString &alt, Html
     // Left to the text layout, a scaled image is resampled without
     // interpolation and looks rough.
     if (!isSvg && display.isValid() && display != natural) {
-        QImage raster(path);
-        if (!raster.isNull()) {
-            const qreal ratio = devicePixelRatio();
-            const QSize pixelSize = (QSizeF(display) * ratio).toSize();
-            QImage scaled = raster.scaled(pixelSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-            if (!scaled.isNull()) {
-                scaled.setDevicePixelRatio(ratio);
-                const QString name = QStringLiteral("mmd-res-") + QString::number(qHash(path), 16) + QLatin1Char('-') + QString::number(display.width());
-                m_document->addResource(QTextDocument::ImageResource, QUrl(name), scaled);
+        const qreal ratio = devicePixelRatio();
+        const QSize pixelSize = (QSizeF(display) * ratio).toSize();
+        const QImage scaled = LocalImageCache::instance().getScaled(path, pixelSize, ratio, natural);
+        if (!scaled.isNull()) {
+            const QString name = QStringLiteral("mmd-res-") + QString::number(qHash(path), 16) + QLatin1Char('-') + QString::number(display.width());
+            m_document->addResource(QTextDocument::ImageResource, QUrl(name), scaled);
 
-                QTextImageFormat format;
-                format.setName(name);
-                format.setWidth(display.width());
-                format.setHeight(display.height());
-                linkAnchor(format);
-                m_cursor.insertText(QString(QChar::ObjectReplacementCharacter), format);
-                return;
-            }
+            QTextImageFormat format;
+            format.setName(name);
+            format.setWidth(display.width());
+            format.setHeight(display.height());
+            linkAnchor(format);
+            m_cursor.insertText(QString(QChar::ObjectReplacementCharacter), format);
+            return;
         }
     }
 
@@ -1400,8 +1408,10 @@ void Builder::emitTable()
         for (std::size_t column = 0; column < columns; ++column) {
             const Cell &cell = table.rows[row][column];
             QTextCursor cellCursor = target->cellAt(int(row), int(column)).firstCursorPosition();
-            if (cell.document)
+            if (cell.document) {
+                copyHtmlResources(*cell.document);
                 cellCursor.insertFragment(QTextDocumentFragment(cell.document.get()));
+            }
             if (cell.alignment != Qt::AlignLeft) {
                 QTextBlockFormat blockFormat = cellCursor.blockFormat();
                 blockFormat.setAlignment(cell.alignment);
@@ -1865,9 +1875,12 @@ void Builder::renderHtmlTable(const QString &innerHtml)
         bool header = false;
         int colspan = 1;
         int rowspan = 1;
+        HtmlLength width;
         Qt::Alignment alignment;
+        QTextCharFormat::VerticalAlignment verticalAlignment = QTextCharFormat::AlignMiddle;
     };
     QVector<QVector<HtmlCell>> rows;
+    QTextCharFormat::VerticalAlignment currentValign = QTextCharFormat::AlignMiddle;
 
     for (int i = 0; i < tokens.size(); ++i) {
         const HtmlToken &token = tokens[i];
@@ -1875,6 +1888,13 @@ void Builder::renderHtmlTable(const QString &innerHtml)
             continue;
         if (token.name == QLatin1String("tr")) {
             rows.append(QVector<HtmlCell>());
+            const QString rValign = htmlAttribute(token, QStringLiteral("valign")).toLower();
+            if (rValign == QLatin1String("top"))
+                currentValign = QTextCharFormat::AlignTop;
+            else if (rValign == QLatin1String("bottom"))
+                currentValign = QTextCharFormat::AlignBottom;
+            else
+                currentValign = QTextCharFormat::AlignMiddle;
             continue;
         }
         if (token.name != QLatin1String("td") && token.name != QLatin1String("th"))
@@ -1893,7 +1913,32 @@ void Builder::renderHtmlTable(const QString &innerHtml)
             cell.colspan = colspan;
         if (rowspan > 1)
             cell.rowspan = rowspan;
+
+        cell.width = parseHtmlLength(htmlAttribute(token, QStringLiteral("width")));
+        if (cell.width.percent == 0 && cell.width.pixels == 0) {
+            const QString styleAttr = htmlAttribute(token, QStringLiteral("style"));
+            if (!styleAttr.isEmpty()) {
+                static const QRegularExpression styleWidthRe(QStringLiteral(R"(width\s*:\s*([^;]+))"), QRegularExpression::CaseInsensitiveOption);
+                const QRegularExpressionMatch styleMatch = styleWidthRe.match(styleAttr);
+                if (styleMatch.hasMatch()) {
+                    QString wVal = styleMatch.captured(1).trimmed();
+                    if (wVal.endsWith(QLatin1String("px"), Qt::CaseInsensitive))
+                        wVal.chop(2);
+                    cell.width = parseHtmlLength(wVal);
+                }
+            }
+        }
+
         cell.alignment = htmlAlignment(token);
+        cell.verticalAlignment = currentValign;
+        const QString cValign = htmlAttribute(token, QStringLiteral("valign")).toLower();
+        if (cValign == QLatin1String("top"))
+            cell.verticalAlignment = QTextCharFormat::AlignTop;
+        else if (cValign == QLatin1String("bottom"))
+            cell.verticalAlignment = QTextCharFormat::AlignBottom;
+        else if (cValign == QLatin1String("middle"))
+            cell.verticalAlignment = QTextCharFormat::AlignMiddle;
+
         rows.last().append(cell);
         if (close >= 0)
             i = close;
@@ -1906,8 +1951,12 @@ void Builder::renderHtmlTable(const QString &innerHtml)
         return;
 
     unsigned columns = 0;
-    for (const QVector<HtmlCell> &row : rows)
-        columns = (std::max)(columns, unsigned(row.size()));
+    for (const QVector<HtmlCell> &row : rows) {
+        unsigned rowCols = 0;
+        for (const HtmlCell &cell : row)
+            rowCols += unsigned((std::max)(1, cell.colspan));
+        columns = (std::max)(columns, rowCols);
+    }
     if (columns == 0)
         return;
 
@@ -1920,19 +1969,89 @@ void Builder::renderHtmlTable(const QString &innerHtml)
     format.setBorderBrush(QBrush(m_style.theme.markdown.tableBorder));
     format.setCellSpacing(0);
     format.setCellPadding(8);
+
     QVector<QTextLength> constraints;
-    for (unsigned column = 0; column < columns; ++column)
-        constraints.append(QTextLength(QTextLength::PercentageLength, 100.0 / columns));
+    constraints.resize(qsizetype(columns));
+    QVector<HtmlLength> specifiedWidths;
+    specifiedWidths.resize(qsizetype(columns));
+
+    for (const QVector<HtmlCell> &row : rows) {
+        int colIdx = 0;
+        for (const HtmlCell &cell : row) {
+            if (cell.colspan <= 1 && colIdx < int(columns)) {
+                if (specifiedWidths[colIdx].percent == 0 && specifiedWidths[colIdx].pixels == 0) {
+                    if (cell.width.percent > 0 || cell.width.pixels > 0)
+                        specifiedWidths[colIdx] = cell.width;
+                }
+            }
+            colIdx += (std::max)(1, cell.colspan);
+        }
+    }
+
+    qreal totalSpecifiedPercent = 0.0;
+    int unspecifiedCount = 0;
+    for (int c = 0; c < int(columns); ++c) {
+        if (specifiedWidths[c].percent > 0)
+            totalSpecifiedPercent += specifiedWidths[c].percent;
+        else
+            ++unspecifiedCount;
+    }
+
+    for (int c = 0; c < int(columns); ++c) {
+        if (specifiedWidths[c].percent > 0) {
+            constraints[c] = QTextLength(QTextLength::PercentageLength, specifiedWidths[c].percent);
+        } else if (specifiedWidths[c].pixels > 0) {
+            constraints[c] = QTextLength(QTextLength::FixedLength, specifiedWidths[c].pixels);
+        } else {
+            const qreal remaining = (std::max)(0.0, 100.0 - totalSpecifiedPercent);
+            const qreal share = unspecifiedCount > 0 ? remaining / qreal(unspecifiedCount) : 100.0 / qreal(columns);
+            constraints[c] = QTextLength(QTextLength::PercentageLength, share);
+        }
+    }
     format.setColumnWidthConstraints(constraints);
+
+    const int totalTableWidth = m_style.contentWidth > 0 ? m_style.contentWidth : m_style.maxContentWidth;
+    const int padding = qRound(format.cellPadding());
+
+    const auto columnSpanWidth = [&](int startCol, int span) -> int {
+        int widthPx = 0;
+        const int endCol = (std::min)(int(columns), startCol + (std::max)(1, span));
+        for (int c = startCol; c < endCol; ++c) {
+            if (constraints[c].type() == QTextLength::PercentageLength) {
+                widthPx += qRound(constraints[c].rawValue() / 100.0 * qreal(totalTableWidth));
+            } else if (constraints[c].type() == QTextLength::FixedLength) {
+                widthPx += qRound(constraints[c].rawValue());
+            } else {
+                widthPx += qRound(qreal(totalTableWidth) / qreal(columns));
+            }
+        }
+        return (std::max)(40, widthPx - (2 * padding + 2));
+    };
 
     QTextTable *table = m_cursor.insertTable(int(rows.size()), int(columns), format);
     for (int row = 0; row < rows.size(); ++row) {
-        for (int column = 0; column < rows[row].size(); ++column) {
-            const HtmlCell &cell = rows[row][column];
-            QTextCursor cellCursor = table->cellAt(row, column).firstCursorPosition();
+        int currentCol = 0;
+        for (int cellIdx = 0; cellIdx < rows[row].size(); ++cellIdx) {
+            const HtmlCell &cell = rows[row][cellIdx];
+            if (currentCol >= int(columns))
+                break;
+
+            const int spanCols = (std::max)(1, cell.colspan);
+            const int spanRows = (std::max)(1, cell.rowspan);
+            if (spanCols > 1 || spanRows > 1) {
+                table->mergeCells(row, currentCol, (std::min)(int(rows.size()) - row, spanRows), (std::min)(int(columns) - currentCol, spanCols));
+            }
+
+            QTextCursor cellCursor = table->cellAt(row, currentCol).firstCursorPosition();
+
+            const int cellAvailableWidth = columnSpanWidth(currentCol, spanCols);
+            RenderStyle cellStyle = m_style;
+            cellStyle.contentWidth = cellAvailableWidth;
+            cellStyle.maxContentWidth = cellAvailableWidth;
+            cellStyle.maxImageWidth = cellAvailableWidth;
 
             QTextDocument sub;
-            MarkdownBuilder::build(&sub, cell.content, m_style);
+            MarkdownBuilder::build(&sub, cell.content, cellStyle);
             if (!sub.isEmpty()) {
                 copyHtmlResources(sub);
                 cellCursor.insertFragment(QTextDocumentFragment(&sub));
@@ -1945,7 +2064,12 @@ void Builder::renderHtmlTable(const QString &innerHtml)
                     }
                 }
             }
-            table->cellAt(row, column).setFormat(tableCellFormat(cell.header));
+
+            QTextTableCellFormat cellFormat = tableCellFormat(cell.header);
+            cellFormat.setVerticalAlignment(cell.verticalAlignment);
+            table->cellAt(row, currentCol).setFormat(cellFormat);
+
+            currentCol += spanCols;
         }
     }
 
