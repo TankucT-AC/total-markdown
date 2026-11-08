@@ -14,27 +14,30 @@
 
 using namespace KSyntaxHighlighting;
 
-// Common fence labels that do not map to a file extension the way KF6
-// expects. Anything else is tried verbatim.
+// Maps common fence language identifiers to canonical file extensions for KF6
+// definition lookup via definitionForFileName("snippet." + ext).
 namespace
 {
 
-QString canonicalLanguage(const QString &language)
+QString canonicalExtension(const QString &language)
 {
-    static const QHash<QString, QString> aliases = {
-        {QStringLiteral("c++"), QStringLiteral("cpp")},
-        {QStringLiteral("cxx"), QStringLiteral("cpp")},
-        {QStringLiteral("c"), QStringLiteral("cpp")},
-        {QStringLiteral("py"), QStringLiteral("python")},
-        {QStringLiteral("js"), QStringLiteral("javascript")},
-        {QStringLiteral("ts"), QStringLiteral("typescript")},
-        {QStringLiteral("sh"), QStringLiteral("bash")},
-        {QStringLiteral("shell"), QStringLiteral("bash")},
-        {QStringLiteral("yml"), QStringLiteral("yaml")},
-        {QStringLiteral("md"), QStringLiteral("markdown")},
-        {QStringLiteral("qml"), QStringLiteral("qml")},
+    static const QHash<QString, QString> extensions = {
+        {QStringLiteral("c++"), QStringLiteral("cpp")},   {QStringLiteral("cxx"), QStringLiteral("cpp")},
+        {QStringLiteral("c"), QStringLiteral("c")},       {QStringLiteral("cpp"), QStringLiteral("cpp")},
+        {QStringLiteral("py"), QStringLiteral("py")},     {QStringLiteral("python"), QStringLiteral("py")},
+        {QStringLiteral("js"), QStringLiteral("js")},     {QStringLiteral("javascript"), QStringLiteral("js")},
+        {QStringLiteral("ts"), QStringLiteral("ts")},     {QStringLiteral("typescript"), QStringLiteral("ts")},
+        {QStringLiteral("sh"), QStringLiteral("sh")},     {QStringLiteral("shell"), QStringLiteral("sh")},
+        {QStringLiteral("bash"), QStringLiteral("sh")},   {QStringLiteral("zsh"), QStringLiteral("sh")},
+        {QStringLiteral("yml"), QStringLiteral("yaml")},  {QStringLiteral("yaml"), QStringLiteral("yaml")},
+        {QStringLiteral("md"), QStringLiteral("md")},     {QStringLiteral("markdown"), QStringLiteral("md")},
+        {QStringLiteral("qml"), QStringLiteral("qml")},   {QStringLiteral("rs"), QStringLiteral("rs")},
+        {QStringLiteral("rust"), QStringLiteral("rs")},   {QStringLiteral("rb"), QStringLiteral("rb")},
+        {QStringLiteral("ruby"), QStringLiteral("rb")},   {QStringLiteral("go"), QStringLiteral("go")},
+        {QStringLiteral("json"), QStringLiteral("json")}, {QStringLiteral("xml"), QStringLiteral("xml")},
+        {QStringLiteral("html"), QStringLiteral("html")}, {QStringLiteral("css"), QStringLiteral("css")},
     };
-    return aliases.value(language.toLower(), language);
+    return extensions.value(language.toLower(), language.toLower());
 }
 
 } // namespace
@@ -58,12 +61,14 @@ Definition CodeHighlighter::definitionFor(const QString &language) const
     if (language.isEmpty())
         return Definition();
 
-    const QString canonical = canonicalLanguage(language);
-    Definition definition = m_repository.definitionForFileName(QStringLiteral("snippet.") + canonical);
+    const QString ext = canonicalExtension(language);
+    Definition definition = m_repository.definitionForFileName(QStringLiteral("snippet.") + ext);
     if (!definition.isValid())
-        definition = m_repository.definitionForName(canonical);
+        definition = m_repository.definitionForFileName(QStringLiteral("snippet.") + language);
     if (!definition.isValid())
         definition = m_repository.definitionForName(language);
+    if (!definition.isValid())
+        definition = m_repository.definitionForName(ext);
     return definition;
 }
 

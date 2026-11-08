@@ -69,10 +69,12 @@ void CodeHighlightTest::switchingThemeChangesCodeColors()
     highlighter.setThemeDefinition(ThemeDefinition::light());
     highlighter.highlight(document.get());
     const QSet<QRgb> light = paletteOf(document.get());
+    QVERIFY(light.size() > 1);
 
     highlighter.setThemeDefinition(ThemeDefinition::dark());
     highlighter.highlight(document.get());
     const QSet<QRgb> dark = paletteOf(document.get());
+    QVERIFY(dark.size() > 1);
 
     QVERIFY(light != dark);
 }
