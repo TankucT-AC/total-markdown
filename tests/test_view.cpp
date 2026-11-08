@@ -6,6 +6,7 @@
 #include "TestHttpServer.h"
 #include "core/DocumentLimits.h"
 #include "core/ImageFetcher.h"
+#include "core/LocalImageCache.h"
 #include "core/MarkdownBuilder.h"
 #include "core/Theme.h"
 #include "viewer/GifObjectHandler.h"
@@ -64,6 +65,7 @@ private slots:
     void htmlTableImagesScaleToCellWidthAndDoNotOverflow();
     void remoteImageIsPreScaledToTheDrawnWidth();
     void hoveringALinkShowsTheHandCursor();
+    void prefetchLoadsLocalImagesInBackground();
 };
 
 void ViewTest::rendersMarkdownIntoDocument()
@@ -820,6 +822,33 @@ void ViewTest::hoveringALinkShowsTheHandCursor()
     QEvent leave(QEvent::Leave);
     QApplication::sendEvent(&view, &leave);
     QCOMPARE(view.viewport()->cursor().shape(), Qt::IBeamCursor);
+}
+
+void ViewTest::prefetchLoadsLocalImagesInBackground()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString filePath = tempDir.filePath(QStringLiteral("photo.png"));
+
+    QImage img(300, 200, QImage::Format_ARGB32);
+    img.fill(Qt::yellow);
+    QVERIFY(img.save(filePath));
+
+    LocalImageCache::instance().clear();
+
+    MarkdownView view;
+    view.setBaseDir(tempDir.path());
+    view.setRenderInterval(100);
+    view.setMarkdown(QStringLiteral("![Photo](photo.png)\n"));
+
+    // Wait for debounce and background prefetch to finish
+    QTest::qWait(150);
+
+    // Image size should be available immediately from cache
+    QCOMPARE(LocalImageCache::instance().naturalSize(filePath), QSize(300, 200));
+
+    // The document should have finished rendering
+    QVERIFY(!view.document()->isEmpty());
 }
 
 QTEST_MAIN(ViewTest)

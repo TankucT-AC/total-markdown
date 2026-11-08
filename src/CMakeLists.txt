@@ -31,6 +31,8 @@ add_library(mmd_core STATIC
     core/HtmlFragment.cpp
     core/ImageResolver.h
     core/ImageResolver.cpp
+    core/LocalImageCache.h
+    core/LocalImageCache.cpp
     core/ImageFetcher.h
     core/ImageFetcher.cpp
     core/DocumentLimits.h

@@ -5,6 +5,7 @@
 
 #include "core/HtmlFragment.h"
 #include "core/ImageResolver.h"
+#include "core/LocalImageCache.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -1317,7 +1318,7 @@ void Builder::insertImageElement(const QString &source, const QString &alt, Html
         natural = renderer.defaultSize();
     }
     if (!natural.isValid())
-        natural = QImageReader(path).size();
+        natural = LocalImageCache::instance().naturalSize(path);
 
     QSize display = natural;
     if (natural.isValid() && natural.width() > 0) {
@@ -1353,24 +1354,20 @@ void Builder::insertImageElement(const QString &source, const QString &alt, Html
     // Left to the text layout, a scaled image is resampled without
     // interpolation and looks rough.
     if (!isSvg && display.isValid() && display != natural) {
-        QImage raster(path);
-        if (!raster.isNull()) {
-            const qreal ratio = devicePixelRatio();
-            const QSize pixelSize = (QSizeF(display) * ratio).toSize();
-            QImage scaled = raster.scaled(pixelSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-            if (!scaled.isNull()) {
-                scaled.setDevicePixelRatio(ratio);
-                const QString name = QStringLiteral("mmd-res-") + QString::number(qHash(path), 16) + QLatin1Char('-') + QString::number(display.width());
-                m_document->addResource(QTextDocument::ImageResource, QUrl(name), scaled);
+        const qreal ratio = devicePixelRatio();
+        const QSize pixelSize = (QSizeF(display) * ratio).toSize();
+        const QImage scaled = LocalImageCache::instance().getScaled(path, pixelSize, ratio, natural);
+        if (!scaled.isNull()) {
+            const QString name = QStringLiteral("mmd-res-") + QString::number(qHash(path), 16) + QLatin1Char('-') + QString::number(display.width());
+            m_document->addResource(QTextDocument::ImageResource, QUrl(name), scaled);
 
-                QTextImageFormat format;
-                format.setName(name);
-                format.setWidth(display.width());
-                format.setHeight(display.height());
-                linkAnchor(format);
-                m_cursor.insertText(QString(QChar::ObjectReplacementCharacter), format);
-                return;
-            }
+            QTextImageFormat format;
+            format.setName(name);
+            format.setWidth(display.width());
+            format.setHeight(display.height());
+            linkAnchor(format);
+            m_cursor.insertText(QString(QChar::ObjectReplacementCharacter), format);
+            return;
         }
     }
 

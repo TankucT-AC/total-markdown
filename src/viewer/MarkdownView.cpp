@@ -6,6 +6,7 @@
 #include "core/FontManager.h"
 #include "core/ImageFetcher.h"
 #include "core/ImageResolver.h"
+#include "core/LocalImageCache.h"
 #include "viewer/CheckboxObjectHandler.h"
 #include "viewer/ChipObjectHandler.h"
 #include "viewer/CodeHighlighter.h"
@@ -25,6 +26,7 @@
 #include <QLocale>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QRegularExpression>
 #include <QResizeEvent>
 #include <QScrollBar>
 #include <QTextBlock>
@@ -47,6 +49,44 @@ constexpr int kDefaultRenderIntervalMs = 40;
 // decides which heading counts as current. Sharing one value keeps the two
 // consistent: the section just scrolled to is always the one highlighted.
 constexpr int kHeadingTopGap = 8;
+
+void scanAndPrefetchImages(const QString &markdown, const QString &baseDir)
+{
+    if (!markdown.contains(QLatin1String("![")) && !markdown.contains(QLatin1String("<img"), Qt::CaseInsensitive))
+        return;
+
+    static const QRegularExpression mdImageRegex(QStringLiteral(R"(!\[.*?\]\(([^)\s]+))"));
+    static const QRegularExpression htmlImageRegex(QStringLiteral(R"(<img[^>]+src=["']([^"']+)["'])"), QRegularExpression::CaseInsensitiveOption);
+
+    QStringList paths;
+
+    auto it = mdImageRegex.globalMatch(markdown);
+    while (it.hasNext()) {
+        const auto match = it.next();
+        const QString src = match.captured(1);
+        if (!ImageResolver::isRemote(src)) {
+            const QString resolved = ImageResolver::resolve(src, baseDir);
+            if (!resolved.isEmpty() && !ImageResolver::isAnimated(resolved) && !resolved.endsWith(QLatin1String(".svg"), Qt::CaseInsensitive))
+                paths.append(resolved);
+        }
+    }
+
+    auto itHtml = htmlImageRegex.globalMatch(markdown);
+    while (itHtml.hasNext()) {
+        const auto match = itHtml.next();
+        const QString src = match.captured(1);
+        if (!ImageResolver::isRemote(src)) {
+            const QString resolved = ImageResolver::resolve(src, baseDir);
+            if (!resolved.isEmpty() && !ImageResolver::isAnimated(resolved) && !resolved.endsWith(QLatin1String(".svg"), Qt::CaseInsensitive))
+                paths.append(resolved);
+        }
+    }
+
+    if (!paths.isEmpty()) {
+        paths.removeDuplicates();
+        LocalImageCache::instance().prefetch(paths);
+    }
+}
 
 // The text layout paints a scaled image without interpolation, so a large remote
 // screenshot looks rough. Pre-scale it to the size the document draws it at and
@@ -300,6 +340,7 @@ void MarkdownView::setBaseDir(const QString &directory)
     if (m_style.baseDir == directory)
         return;
     m_style.baseDir = directory;
+    scanAndPrefetchImages(m_source, m_style.baseDir);
     renderNow();
 }
 
@@ -414,6 +455,8 @@ void MarkdownView::setMarkdown(const QString &markdown)
     // A fresh edit gives up any earlier "render anyway": keeping a huge document
     // live is exactly what the size policy exists to prevent.
     m_previewRequested = false;
+
+    scanAndPrefetchImages(m_source, m_style.baseDir);
 
     const int interval = effectiveRenderInterval();
     if (interval == 0) {
