@@ -27,7 +27,31 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets Test Svg Network)
-find_package(KF6SyntaxHighlighting 6.0 REQUIRED)
+find_package(KF6SyntaxHighlighting 6.0 QUIET)
+if(NOT KF6SyntaxHighlighting_FOUND)
+    message(STATUS "total-markdown: KF6SyntaxHighlighting not found in system, fetching via FetchContent...")
+    include(FetchContent)
+
+    FetchContent_Declare(
+        extra-cmake-modules
+        GIT_REPOSITORY https://invent.kde.org/frameworks/extra-cmake-modules.git
+        GIT_TAG v6.0.0
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(extra-cmake-modules)
+    list(APPEND CMAKE_MODULE_PATH "${extra-cmake-modules_SOURCE_DIR}/find-modules")
+    list(APPEND CMAKE_MODULE_PATH "${extra-cmake-modules_SOURCE_DIR}/kde-modules")
+
+    set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    set(BUILD_QCH OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        syntax-highlighting
+        GIT_REPOSITORY https://invent.kde.org/frameworks/syntax-highlighting.git
+        GIT_TAG v6.0.0
+        GIT_SHALLOW TRUE
+    )
+    FetchContent_MakeAvailable(syntax-highlighting)
+endif()
 
 # Portable builds (the CPack package) ship KDE's KSyntaxHighlighting engine and
 # its syntax definitions next to the executable, so a distribution without a
@@ -43,7 +67,7 @@ option(MMD_BUNDLE_KSYNTAX
 # -ansi is intentionally omitted: it selects C++98 and would break C++20.
 add_library(mmd_warnings INTERFACE)
 target_compile_options(mmd_warnings INTERFACE
-    $<$<CXX_COMPILER_ID:GNU,Clang>:
+    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:
         -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wpointer-arith
         -Wcast-qual -Wcast-align -Wwrite-strings -Wfloat-equal
         -Woverloaded-virtual -Wundef -Wuninitialized -Wredundant-decls
@@ -65,6 +89,7 @@ add_subdirectory(tests)
 # ---------------------------------------------------------------------------
 # Desktop integration + packaging
 # ---------------------------------------------------------------------------
+if(UNIX AND NOT APPLE)
 install(FILES packaging/total-markdown.desktop
     DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications)
 # Every size the app ships, so a desktop that ignores the scalable icon still
@@ -81,13 +106,14 @@ install(FILES packaging/total-markdown.1
     DESTINATION ${CMAKE_INSTALL_MANDIR}/man1)
 install(FILES packaging/io.github.tankuctac.total-markdown.metainfo.xml
     DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/metainfo)
+endif()
 
 # The KSyntaxHighlighting library is only the engine: the language definitions
 # live in a data directory it loads at runtime. Bundle that too, next to the
 # usual location, so highlighting works without the distro package.
 # The imported target's location property is named differently across distros
 # (RELEASE / NOCONFIG / ...), so try them all, then the usual prefixes.
-if(MMD_BUNDLE_KSYNTAX)
+if(MMD_BUNDLE_KSYNTAX AND UNIX AND NOT APPLE)
 set(_ksyntax_candidates)
 foreach(_prop IMPORTED_LOCATION_RELEASE IMPORTED_LOCATION_NOCONFIG IMPORTED_LOCATION IMPORTED_LOCATION_DEBUG)
     get_target_property(_kf6_lib KF6::SyntaxHighlighting ${_prop})
@@ -119,8 +145,16 @@ endif()
 # LaTeX formulas: the vendored MicroTeX keeps its metrics compiled in, but loads
 # the glyph outlines from res/fonts at run time. MathRenderer looks for the
 # directory relative to the executable's data root, which is where this puts it.
-install(DIRECTORY third_party/microtex/res
-    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/total-markdown/microtex)
+if(APPLE)
+    install(DIRECTORY third_party/microtex/res
+        DESTINATION "Total Markdown.app/Contents/Resources/microtex")
+elseif(WIN32)
+    install(DIRECTORY third_party/microtex/res
+        DESTINATION microtex)
+else()
+    install(DIRECTORY third_party/microtex/res
+        DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/total-markdown/microtex)
+endif()
 
 # A minimal Debian package: `cmake --build ... && cpack -G DEB`.
 # Note: dpkg-shlibdeps cannot run here (the build host is not Debian-based), so

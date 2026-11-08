@@ -1,7 +1,7 @@
 # Maintainer: Magomed Gadzhiumarov <magomedgadziumarov265@gmail.com>
 
 pkgname=total-markdown
-pkgver=0.2.0alpha1
+pkgver=0.2.0alpha2
 pkgrel=1
 pkgdesc="A fast, native, two-pane Markdown viewer and editor"
 arch=('x86_64')
@@ -9,7 +9,7 @@ url="https://github.com/TankucT-AC/total-markdown"
 license=('GPL3')
 depends=('qt6-base' 'qt6-svg' 'syntax-highlighting')
 makedepends=('cmake' 'ninja' 'git')
-source=("git+https://github.com/TankucT-AC/total-markdown.git#tag=v0.2.0-alpha1")
+source=("git+https://github.com/TankucT-AC/total-markdown.git#tag=v0.2.0-alpha2")
 sha256sums=('SKIP')
 
 # Distro packages depend on the system KSyntaxHighlighting; the portable

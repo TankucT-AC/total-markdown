@@ -1,3 +1,14 @@
+total-markdown (0.2.0~alpha2) unstable; urgency=medium
+
+  * Multi-platform release: added Windows (x64) and macOS (Apple Silicon) packages.
+  * Accelerated markdown and image rendering via LocalImageCache and fast
+    2-step downsampling (cold render down to ~16 ms, warm render ~7 ms).
+  * Constrained table cell images to cell width for HTML and GFM tables.
+  * Comprehensive UI, speed, and usability enhancements across editor and viewer.
+  * Modernized header include guards across all translation units.
+
+ -- Magomed Gadzhiumarov <magomedgadziumarov265@gmail.com>  Sun, 08 Nov 2026 19:55:00 +0300
+
 total-markdown (0.2.0~alpha1) unstable; urgency=medium
 
   * Initial alpha release: two-pane live preview (CommonMark + GFM),

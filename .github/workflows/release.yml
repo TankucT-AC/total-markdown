@@ -1,13 +1,12 @@
-# Builds the alpha release packages and attaches them to the GitHub release
-# of the pushed tag. The Debian package is produced on Debian 13 (trixie) —
-# the oldest line that carries KF6, which the distro packages depend on; the
-# Arch package is built by the very PKGBUILD an AUR user would run.
+# Builds the alpha release packages across Linux, Windows, and macOS,
+# and publishes them to the GitHub release of the pushed tag (or workflow dispatch).
 
 name: Release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -33,8 +32,6 @@ jobs:
 
       - name: Collect the package
         run: |
-          # dpkg-buildpackage puts the results in the parent directory, which
-          # upload-artifact refuses to reach; move the .deb into the tree.
           mkdir dist
           mv ../*.deb dist/
 
@@ -53,7 +50,7 @@ jobs:
       - name: Install build dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed git
+          pacman -S --noconfirm --needed git sed
 
       - name: Create an unprivileged build user
         run: |
@@ -63,12 +60,21 @@ jobs:
       - name: Check out the tagged source
         uses: actions/checkout@v4
 
+      - name: Prepare PKGBUILD for current tag
+        working-directory: packaging/arch
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if [[ "$tag" == v* ]]; then
+            ver="${tag#v}"
+            archver="${ver//-/}"
+            sed -i "s/^pkgver=.*/pkgver=${archver}/" PKGBUILD
+            sed -i "s|#tag=.*|#tag=${tag}\")|" PKGBUILD
+          fi
+
       - name: Build the package
         working-directory: packaging/arch
         run: |
           chown -R builder:builder "$GITHUB_WORKSPACE"
-          # sudo resets the environment, so $GITHUB_WORKSPACE is empty inside
-          # the builder's shell; makepkg runs from this step's own directory.
           sudo -u builder makepkg -sf --noconfirm
 
       - name: Smoke-test the package
@@ -83,40 +89,232 @@ jobs:
           path: packaging/arch/*.pkg.tar.zst
           if-no-files-found: error
 
+  linux-portable:
+    name: Linux Portable Tarball
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build ca-certificates git \
+            qt6-base-dev qt6-svg-dev libkf6syntaxhighlighting-dev
+
+      - name: Check out the source
+        uses: actions/checkout@v4
+
+      - name: Configure and build
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DMMD_BUNDLE_KSYNTAX=ON
+          cmake --build build
+
+      - name: Run tests
+        run: |
+          export QT_QPA_PLATFORM=offscreen
+          ctest --test-dir build --output-on-failure
+
+      - name: Package portable archive
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          [[ "$tag" != v* ]] && tag="v0.2.0-alpha2"
+          version="${tag#v}"
+          DESTDIR="$PWD/staging" cmake --install build
+          mkdir -p dist
+          tar -czvf "dist/total-markdown-${version}-linux-x86_64.tar.gz" -C staging/usr .
+
+      - name: Upload portable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-markdown-linux-portable
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64 Package
+    runs-on: windows-latest
+    steps:
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-qt6-base
+            mingw-w64-ucrt-x86_64-qt6-svg
+            mingw-w64-ucrt-x86_64-syntax-highlighting
+            zip
+
+      - name: Check out the source
+        uses: actions/checkout@v4
+
+      - name: Build
+        shell: msys2 {0}
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build
+
+      - name: Test
+        shell: msys2 {0}
+        run: |
+          export QT_QPA_PLATFORM=offscreen
+          ctest --test-dir build --output-on-failure
+
+      - name: Package Windows ZIP
+        shell: msys2 {0}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          [[ "$tag" != v* ]] && tag="v0.2.0-alpha2"
+          version="${tag#v}"
+          pkg_dir="total-markdown-${version}-windows-x64"
+          mkdir -p "${pkg_dir}"
+
+          cp build/src/total-markdown.exe "${pkg_dir}/"
+          windeployqt --no-translations --compiler-runtime "${pkg_dir}/total-markdown.exe"
+
+          mkdir -p "${pkg_dir}/microtex"
+          cp -r third_party/microtex/res "${pkg_dir}/microtex/"
+
+          if [ -d "/ucrt64/share/org.kde.syntax-highlighting" ]; then
+            mkdir -p "${pkg_dir}/share/org.kde.syntax-highlighting"
+            cp -r /ucrt64/share/org.kde.syntax-highlighting/* "${pkg_dir}/share/org.kde.syntax-highlighting/"
+          fi
+
+          cp LICENSE "${pkg_dir}/"
+          zip -r "${pkg_dir}.zip" "${pkg_dir}"
+          mkdir -p dist
+          mv "${pkg_dir}.zip" dist/
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-markdown-windows
+          path: dist/*.zip
+          if-no-files-found: error
+
+  macos:
+    name: macOS Apple Silicon (arm64) Package
+    runs-on: macos-14
+    steps:
+      - name: Install dependencies
+        run: |
+          brew install qt ninja
+          echo "$(brew --prefix qt)/bin" >> $GITHUB_PATH
+
+      - name: Check out the source
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix qt)"
+          cmake --build build
+
+      - name: Test
+        run: |
+          export QT_QPA_PLATFORM=offscreen
+          ctest --test-dir build --output-on-failure
+
+      - name: Package macOS DMG and ZIP
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          [[ "$tag" != v* ]] && tag="v0.2.0-alpha2"
+          version="${tag#v}"
+
+          app_bundle="build/src/Total Markdown.app"
+
+          # Bundle MicroTeX LaTeX fonts and resources
+          mkdir -p "$app_bundle/Contents/Resources/microtex"
+          cp -r third_party/microtex/res "$app_bundle/Contents/Resources/microtex/"
+
+          # Deploy Qt frameworks and plugins
+          macdeployqt "$app_bundle" -dmg
+
+          mkdir -p dist
+          dmg_name="total-markdown-${version}-macos-arm64.dmg"
+          zip_name="total-markdown-${version}-macos-arm64.zip"
+
+          mv "build/src/Total Markdown.dmg" "dist/$dmg_name"
+          (cd build/src && zip -r -y "../../dist/$zip_name" "Total Markdown.app")
+
+      - name: Upload macOS packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-markdown-macos
+          path: dist/*
+          if-no-files-found: error
+
   release:
     name: Publish the GitHub release
-    needs: [debian, arch]
+    needs: [debian, arch, linux-portable, windows, macos]
     runs-on: ubuntu-latest
     steps:
-      - name: Download the packages
+      - name: Download all packages
         uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
 
-      - name: Create or update the release
+      - name: Generate Checksums and Release Notes
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+          cd ..
+
+          tag="${GITHUB_REF_NAME}"
+          [[ "$tag" != v* ]] && tag="v0.2.0-alpha2"
+          version="${tag#v}"
+
+          cat << 'EOF' > notes.md
+          # Total Markdown ${version} (Alpha 2)
+
+          The second public alpha release of **Total Markdown** brings official multi-platform packages for **Windows** and **macOS**, along with major rendering speed optimizations and UI improvements.
+
+          ### Downloads
+
+          | Platform | File | Description |
+          | :--- | :--- | :--- |
+          | **Windows** | `total-markdown-${version}-windows-x64.zip` | Standalone portable zip for Windows 10/11 (x64). Unzip and run `total-markdown.exe`. |
+          | **macOS** | `total-markdown-${version}-macos-arm64.dmg` | Disk image for Apple Silicon Macs (M1/M2/M3/M4, macOS 12+). Open and drag to Applications. |
+          | **macOS** | `total-markdown-${version}-macos-arm64.zip` | Portable `.app` zip bundle for Apple Silicon Macs. |
+          | **Linux (Debian/Ubuntu)** | `total-markdown_${version}~alpha2_amd64.deb` | Debian 13+, Ubuntu 25.04+ package (`sudo apt install ./...deb`). |
+          | **Linux (Arch Linux)** | `total-markdown-${version}alpha2-1-x86_64.pkg.tar.zst` | Arch / Manjaro package (`sudo pacman -U ...`). |
+          | **Linux (Portable)** | `total-markdown-${version}-linux-x86_64.tar.gz` | Portable binary tarball with bundled KSyntaxHighlighting engine. |
+
+          ### Highlights in this Release
+
+          - **Multi-Platform Support**: Official binaries for Windows (x64) and macOS (Apple Silicon arm64).
+          - **Major Rendering Performance**: Added `LocalImageCache` with in-memory caching and fast 2-step downsampling; re-render times on image-heavy documents dropped from ~722 ms to **7–16 ms** (~50x–100x speedup).
+          - **Table Cell Image Constraints**: Images in HTML and GFM table cells are now proportionally constrained to cell width, preventing tables from expanding horizontally.
+          - **Header & Architecture Modernization**: Standardized `#ifndef` include guards across all translation units.
+          - **UI & Usability**: Refined responsive margins, outline navigation, and find strip.
+
+          ### Verification
+          Checksums for all downloadable files are available in `SHA256SUMS.txt`.
+
+          *Note: As an alpha release, packages are currently unsigned. On Windows, click "More info -> Run anyway" if prompted by SmartScreen. On macOS, right-click the app and choose "Open" on first launch.*
+          EOF
+          # Substitute the version variable into notes.md
+          sed -i "s/\${version}/${version}/g" notes.md
+
+      - name: Publish to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          {
-            echo "Total Markdown $version — first alpha."
-            echo
-            echo "### Packages"
-            echo
-            echo "- Debian-based: sudo apt install ./total-markdown_*_amd64.deb (Debian 13+, Ubuntu 25.04+ — needs the KF6 syntax-highlighting runtime)"
-            echo "- Arch-based: sudo pacman -U total-markdown-*x86_64.pkg.tar.zst"
-            echo
-            echo "For distributions without a KF6 package (Ubuntu 24.04 LTS, for one), build the portable CPack package from source: it bundles the KSyntaxHighlighting engine."
-            echo
-            echo "This is an alpha — interfaces and file formats may still change. Feedback: https://github.com/TankucT-AC/total-markdown/issues"
-          } > notes.md
-          # Pushing an annotated tag makes GitHub publish a release from the
-          # tag's own annotation before this job runs, so "create" is too late:
-          # when the release already exists, edit it and upload over the top.
-          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release edit "$GITHUB_REF_NAME" --title "Total Markdown $version" --notes-file notes.md --repo "$GITHUB_REPOSITORY"
+          tag="${GITHUB_REF_NAME}"
+          [[ "$tag" != v* ]] && tag="v0.2.0-alpha2"
+          version="${tag#v}"
+
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$tag" --title "Total Markdown $version" --notes-file notes.md --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$GITHUB_REF_NAME" --title "Total Markdown $version" --notes-file notes.md --repo "$GITHUB_REPOSITORY"
+            gh release create "$tag" --title "Total Markdown $version" --notes-file notes.md --repo "$GITHUB_REPOSITORY"
           fi
-          gh release upload "$GITHUB_REF_NAME" dist/* --clobber --repo "$GITHUB_REPOSITORY"
+          gh release upload "$tag" dist/* --clobber --repo "$GITHUB_REPOSITORY"

@@ -115,19 +115,25 @@ ctest --preset clang-release
 The presets write into `out/<preset>`; `.clangd` points at `out/gcc-debug`, so
 the editor tooling finds the compilation database out of the box.
 
-## Packaging
+## Packaging & Downloads
 
-Alpha releases ship native packages from the
+Alpha releases ship pre-built packages from the
 [releases page](https://github.com/TankucT-AC/total-markdown/releases):
 
-- **Debian-based** — `total-markdown_*_amd64.deb`:
-  `sudo apt install ./total-markdown_0.2.0~alpha1_amd64.deb`.
-  Built on Debian 13 and needs a distribution carrying KDE Frameworks 6
-  (Debian 13, Ubuntu 25.04+); it depends on the system KF6 syntax-highlighting
-  (`libkf6syntaxhighlighting6` / Arch `syntax-highlighting`).
-- **Arch-based** — `total-markdown-*-x86_64.pkg.tar.zst`:
-  `sudo pacman -U ./total-markdown-…-x86_64.pkg.tar.zst`; the
-  [`PKGBUILD`](packaging/arch/PKGBUILD) builds from the release tag.
+- **Windows (x64)** — `total-markdown-*-windows-x64.zip`:
+  Standalone portable archive with bundled Qt 6 runtime, plugins, and MicroTeX LaTeX assets.
+  Unpack anywhere and launch `total-markdown.exe`.
+- **macOS (Apple Silicon)** — `total-markdown-*-macos-arm64.dmg` & `.zip`:
+  Native `.app` bundle for Apple Silicon Macs (M1/M2/M3/M4, macOS 12+), packaged with Qt 6 frameworks.
+  Mount the DMG and drag to Applications (or unzip the archive).
+- **Linux (Debian-based)** — `total-markdown_*_amd64.deb`:
+  `sudo apt install ./total-markdown_*_amd64.deb` (Debian 13+, Ubuntu 25.04+).
+  Depends on the system KF6 syntax-highlighting (`libkf6syntaxhighlighting6`).
+- **Linux (Arch-based)** — `total-markdown-*-x86_64.pkg.tar.zst`:
+  `sudo pacman -U ./total-markdown-*-x86_64.pkg.tar.zst`; built via
+  [`PKGBUILD`](packaging/arch/PKGBUILD).
+- **Linux (Portable)** — `total-markdown-*-linux-x86_64.tar.gz`:
+  Self-contained binary tarball bundling the KSyntaxHighlighting engine.
 
 Both packages install the executable, icons, the `.desktop` entry, a man page
 and the AppStream metadata, and depend on the system KSyntaxHighlighting

@@ -53,9 +53,10 @@ QString MathRenderer::resourceDirectory()
 {
     const QString base = QCoreApplication::applicationDirPath();
     const QStringList candidates = {
-        base + QStringLiteral("/../share/total-markdown/microtex/res"), // installed
+        base + QStringLiteral("/../Resources/microtex/res"), // macOS bundle (Contents/Resources/microtex/res)
+        base + QStringLiteral("/../share/total-markdown/microtex/res"), // installed (Linux)
         base + QStringLiteral("/../third_party/microtex/res"), // build tree
-        base + QStringLiteral("/microtex/res"), // a self-contained bundle
+        base + QStringLiteral("/microtex/res"), // Windows portable / self-contained
     };
 
     for (const QString &candidate : candidates) {

@@ -30,6 +30,13 @@
     <binary>total-markdown</binary>
   </provides>
   <releases>
+    <release version="0.2.0-alpha2" date="2026-11-08">
+      <description>
+        <p>Second alpha release: multi-platform builds for Windows (x64) and macOS
+        (Apple Silicon), accelerated image caching and downscaling, table cell
+        image constraint fixes, and UI/speed enhancements.</p>
+      </description>
+    </release>
     <release version="0.2.0-alpha1" date="2026-11-04">
       <description>
         <p>First public alpha: two-pane live preview, CommonMark and GFM,

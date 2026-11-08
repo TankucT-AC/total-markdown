@@ -118,5 +118,10 @@ target_compile_options(microtex PRIVATE -w)
 # to the executable. Linking it into the build tree keeps that lookup valid
 # without compiling an absolute path into the binary.
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/microtex)
-file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/microtex/res
-    ${CMAKE_CURRENT_BINARY_DIR}/microtex/res SYMBOLIC)
+if(WIN32)
+    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/microtex/res
+        DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/microtex)
+else()
+    file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/microtex/res
+        ${CMAKE_CURRENT_BINARY_DIR}/microtex/res SYMBOLIC)
+endif()
