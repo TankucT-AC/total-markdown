@@ -21,6 +21,8 @@ class AppTest : public QObject
     Q_OBJECT
 
 private slots:
+    void initTestCase();
+    void cleanup();
     void windowOpensWithViewerOnlyByDefault();
     void panelsCanBeClosedAndReopened();
     void paneLayoutPersistsAcrossWindows();
@@ -45,6 +47,21 @@ void AppTest::typeInto(MarkdownEditor *editor, const QString &text, QTextCursor:
     QTextCursor cursor = editor->textCursor();
     cursor.movePosition(QTextCursor::End);
     cursor.insertText(text);
+}
+
+void AppTest::initTestCase()
+{
+    QCoreApplication::setOrganizationName(QStringLiteral("TotalMarkdownTest"));
+    QCoreApplication::setApplicationName(QStringLiteral("test_app"));
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings().clear();
+    QSettings().sync();
+}
+
+void AppTest::cleanup()
+{
+    QSettings().clear();
+    QSettings().sync();
 }
 
 void AppTest::openingAFileRendersThePreviewWithoutWaiting()
@@ -140,6 +157,9 @@ void AppTest::externalChangeReloadsUnmodifiedDocument()
     QVERIFY(window.openFile(path));
     QVERIFY(!window.editor()->document()->isModified());
 
+    // Give filesystem watchers on platforms like Windows time to initialize
+    QTest::qWait(50);
+
     {
         QFile file(path);
         QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Truncate));
@@ -165,6 +185,7 @@ void AppTest::themeChangeUpdatesApplicationPalette()
 void AppTest::windowOpensWithViewerOnlyByDefault()
 {
     QSettings().remove(QStringLiteral("view"));
+    QSettings().sync();
     MainWindow window;
     window.show();
 
@@ -177,6 +198,7 @@ void AppTest::windowOpensWithViewerOnlyByDefault()
 void AppTest::panelsCanBeClosedAndReopened()
 {
     QSettings().remove(QStringLiteral("view"));
+    QSettings().sync();
     MainWindow window;
     window.show();
 
@@ -199,6 +221,7 @@ void AppTest::paneLayoutPersistsAcrossWindows()
 {
     QSettings settings;
     settings.remove(QStringLiteral("view"));
+    settings.sync();
 
     {
         MainWindow window;
@@ -223,11 +246,13 @@ void AppTest::paneLayoutPersistsAcrossWindows()
     }
 
     settings.remove(QStringLiteral("view"));
+    settings.sync();
 }
 
 void AppTest::fontsApplyToPreviewAndEditor()
 {
     QSettings().remove(QStringLiteral("fonts"));
+    QSettings().sync();
     MainWindow window;
     window.show();
 
@@ -248,6 +273,7 @@ void AppTest::fontChoicePersistsAcrossWindows()
 {
     QSettings settings;
     settings.remove(QStringLiteral("fonts"));
+    settings.sync();
 
     {
         MainWindow window;
@@ -262,12 +288,14 @@ void AppTest::fontChoicePersistsAcrossWindows()
     }
 
     settings.remove(QStringLiteral("fonts"));
+    settings.sync();
 }
 
 void AppTest::themeModePersistsAcrossWindows()
 {
     QSettings settings;
     settings.clear();
+    settings.sync();
 
     {
         MainWindow window;
@@ -281,6 +309,7 @@ void AppTest::themeModePersistsAcrossWindows()
     }
 
     settings.clear();
+    settings.sync();
 }
 
 void AppTest::hugeFileOpensPausedAndQuickly()
@@ -320,6 +349,7 @@ void AppTest::remoteImagesAreOnByDefaultAndPersistAcrossWindows()
 {
     QSettings settings;
     settings.remove(QStringLiteral("view/remoteImages"));
+    settings.sync();
 
     {
         MainWindow window;
@@ -342,6 +372,7 @@ void AppTest::remoteImagesAreOnByDefaultAndPersistAcrossWindows()
     }
 
     settings.remove(QStringLiteral("view/remoteImages"));
+    settings.sync();
 }
 
 QTEST_MAIN(AppTest)

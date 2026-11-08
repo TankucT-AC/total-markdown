@@ -325,7 +325,9 @@ void MainWindow::buildMenus()
     m_toggleRemoteImages->setObjectName(QStringLiteral("toggleRemoteImages"));
     m_toggleRemoteImages->setCheckable(true);
     connect(m_toggleRemoteImages, &QAction::toggled, this, [this](bool checked) {
-        QSettings().setValue(QStringLiteral("view/remoteImages"), checked);
+        QSettings settings;
+        settings.setValue(QStringLiteral("view/remoteImages"), checked);
+        settings.sync();
         m_viewer->setRemoteImagesEnabled(checked);
     });
     restoreRemoteImageSettings();
@@ -511,7 +513,9 @@ void MainWindow::updateDocStats()
 void MainWindow::toggleWordWrap(bool wrap)
 {
     m_editor->setWordWrap(wrap);
-    QSettings().setValue(QStringLiteral("editor/wordWrap"), wrap);
+    QSettings settings;
+    settings.setValue(QStringLiteral("editor/wordWrap"), wrap);
+    settings.sync();
     if (m_statusWrap)
         m_statusWrap->setText(wrap ? tr("Wrap: On") : tr("Wrap: Off"));
 }
@@ -540,8 +544,8 @@ void MainWindow::zoomOut()
 
 void MainWindow::resetZoom()
 {
-    const QString body = QSettings().value(QStringLiteral("fonts/bodyFamily")).toString();
-    const QString code = QSettings().value(QStringLiteral("fonts/codeFamily")).toString();
+    const QString body = QSettings().value(QStringLiteral("fonts/body")).toString();
+    const QString code = QSettings().value(QStringLiteral("fonts/code")).toString();
     applyFontChoice(body, code);
 }
 
@@ -817,6 +821,7 @@ void MainWindow::persistThemeSettings()
         const QJsonDocument document(m_themes->currentTheme().toJson());
         settings.setValue(QStringLiteral("theme/custom"), QString::fromUtf8(document.toJson(QJsonDocument::Compact)));
     }
+    settings.sync();
 }
 
 // Pane visibility follows the theme: absent keys mean the shipped default,
@@ -838,6 +843,7 @@ void MainWindow::persistPaneSettings()
     QSettings settings;
     settings.setValue(QStringLiteral("view/editorVisible"), m_toggleEditor->isChecked());
     settings.setValue(QStringLiteral("view/viewerVisible"), m_toggleViewer->isChecked());
+    settings.sync();
 }
 
 // Remote images are on by default: a document full of shields.io badges and a
@@ -866,6 +872,7 @@ void MainWindow::applyFontChoice(const QString &bodyFamily, const QString &codeF
         settings.setValue(QStringLiteral("fonts/body"), bodyFamily);
         settings.setValue(QStringLiteral("fonts/code"), codeFamily);
     }
+    settings.sync();
 
     FontManager fonts;
     if (!bodyFamily.isEmpty() || !codeFamily.isEmpty()) {

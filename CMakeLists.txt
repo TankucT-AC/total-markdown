@@ -3,12 +3,12 @@
 
 cmake_minimum_required(VERSION 3.24)
 
-include(GNUInstallDirs)
-
 project(total-markdown
     VERSION 0.2.0
     DESCRIPTION "Total Markdown — a two-pane Markdown viewer and editor built with Qt Widgets"
     LANGUAGES C CXX)
+
+include(GNUInstallDirs)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 20)
@@ -32,15 +32,20 @@ if(NOT KF6SyntaxHighlighting_FOUND)
     message(STATUS "total-markdown: KF6SyntaxHighlighting not found in system, fetching via FetchContent...")
     include(FetchContent)
 
-    FetchContent_Declare(
-        extra-cmake-modules
-        GIT_REPOSITORY https://invent.kde.org/frameworks/extra-cmake-modules.git
-        GIT_TAG v6.0.0
-        GIT_SHALLOW TRUE
-    )
-    FetchContent_MakeAvailable(extra-cmake-modules)
-    list(APPEND CMAKE_MODULE_PATH "${extra-cmake-modules_SOURCE_DIR}/find-modules")
-    list(APPEND CMAKE_MODULE_PATH "${extra-cmake-modules_SOURCE_DIR}/kde-modules")
+    find_package(ECM 6.0.0 QUIET NO_MODULE)
+    if(NOT ECM_FOUND)
+        FetchContent_Declare(
+            extra-cmake-modules
+            GIT_REPOSITORY https://invent.kde.org/frameworks/extra-cmake-modules.git
+            GIT_TAG v6.0.0
+            GIT_SHALLOW TRUE
+        )
+        FetchContent_MakeAvailable(extra-cmake-modules)
+        list(APPEND CMAKE_MODULE_PATH "${extra-cmake-modules_SOURCE_DIR}/find-modules")
+        list(APPEND CMAKE_MODULE_PATH "${extra-cmake-modules_SOURCE_DIR}/kde-modules")
+        set(ECM_DIR "${extra-cmake-modules_BINARY_DIR}")
+        list(APPEND CMAKE_PREFIX_PATH "${extra-cmake-modules_BINARY_DIR}")
+    endif()
 
     set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
     set(BUILD_QCH OFF CACHE BOOL "" FORCE)
