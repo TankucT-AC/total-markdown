@@ -53,6 +53,8 @@ private slots:
     void htmlParagraphAlignCentersMarkdownBlocks();
     void htmlTableCellsRenderTheirMarkdown();
     void htmlTableWithBlankLinesBecomesATable();
+    void htmlTableImageIsConstrainedByCellWidth();
+    void gfmTableImageIsConstrainedByCellWidth();
     void htmlBadgeRowStaysOnOneLine();
     void readmeRendersWithoutLiteralHtml();
     void boldEmphasisInParagraph();
@@ -862,6 +864,80 @@ void MarkdownTest::htmlTableWithBlankLinesBecomesATable()
             hasList = true;
     }
     QVERIFY(hasList);
+}
+
+void MarkdownTest::htmlTableImageIsConstrainedByCellWidth()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QImage testImg(1200, 600, QImage::Format_ARGB32);
+    testImg.fill(Qt::red);
+    QVERIFY(testImg.save(dir.filePath(QStringLiteral("big.png")), "PNG"));
+
+    RenderStyle style;
+    style.baseDir = dir.path();
+    style.contentWidth = 600;
+    style.maxContentWidth = 600;
+    style.maxImageWidth = 600;
+
+    QTextDocument document;
+    MarkdownBuilder::build(&document,
+                           QStringLiteral("<table><tr>"
+                                          "<td width=\"50%\"><img src=\"big.png\" width=\"100%\"></td>"
+                                          "<td width=\"50%\"><img src=\"big.png\" width=\"100%\"></td>"
+                                          "</tr></table>\n"),
+                           style);
+
+    QVector<int> widths;
+    for (QTextBlock block = document.firstBlock(); block.isValid(); block = block.next()) {
+        for (QTextBlock::Iterator it = block.begin(); !it.atEnd(); ++it) {
+            if (it.fragment().charFormat().isImageFormat())
+                widths.append(int(it.fragment().charFormat().toImageFormat().width()));
+        }
+    }
+
+    QCOMPARE(widths.size(), 2);
+    // In a 600px table with two 50% columns, each cell available width is ~300 - 18 = 282px.
+    for (int w : widths) {
+        QVERIFY(w <= 300);
+        QVERIFY(w >= 250);
+    }
+}
+
+void MarkdownTest::gfmTableImageIsConstrainedByCellWidth()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    QImage testImg(1200, 600, QImage::Format_ARGB32);
+    testImg.fill(Qt::green);
+    QVERIFY(testImg.save(dir.filePath(QStringLiteral("big.png")), "PNG"));
+
+    RenderStyle style;
+    style.baseDir = dir.path();
+    style.contentWidth = 600;
+    style.maxContentWidth = 600;
+    style.maxImageWidth = 600;
+
+    QTextDocument document;
+    MarkdownBuilder::build(&document,
+                           QStringLiteral("| Left | Right |\n"
+                                          "| --- | --- |\n"
+                                          "| ![l](big.png) | ![r](big.png) |\n"),
+                           style);
+
+    QVector<int> widths;
+    for (QTextBlock block = document.firstBlock(); block.isValid(); block = block.next()) {
+        for (QTextBlock::Iterator it = block.begin(); !it.atEnd(); ++it) {
+            if (it.fragment().charFormat().isImageFormat())
+                widths.append(int(it.fragment().charFormat().toImageFormat().width()));
+        }
+    }
+
+    QCOMPARE(widths.size(), 2);
+    for (int w : widths) {
+        QVERIFY(w <= 300);
+        QVERIFY(w >= 250);
+    }
 }
 
 void MarkdownTest::htmlBadgeRowStaysOnOneLine()

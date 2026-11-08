@@ -61,6 +61,7 @@ private slots:
     void failedRemoteImageFallsBackToTheAltChip();
     void remoteImageAppearsAfterDownload();
     void htmlPercentImageFitsThePaneAndReshrinks();
+    void htmlTableImagesScaleToCellWidthAndDoNotOverflow();
     void remoteImageIsPreScaledToTheDrawnWidth();
     void hoveringALinkShowsTheHandCursor();
 };
@@ -257,6 +258,50 @@ void ViewTest::htmlPercentImageFitsThePaneAndReshrinks()
     view.resize(500, 600);
     QTRY_VERIFY_WITH_TIMEOUT(imageWidth() > 0 && imageWidth() < wide, 3000);
     QVERIFY(imageWidth() <= int(view.document()->textWidth()) + 4);
+}
+
+void ViewTest::htmlTableImagesScaleToCellWidthAndDoNotOverflow()
+{
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+
+    // Create a 1000x500 test image
+    QImage testImg(1000, 500, QImage::Format_ARGB32);
+    testImg.fill(Qt::blue);
+    QVERIFY(testImg.save(dir.filePath(QStringLiteral("test.png")), "PNG"));
+
+    MarkdownView view;
+    view.resize(900, 600);
+    view.show();
+    view.setRenderInterval(0);
+    view.setBaseDir(dir.path());
+
+    // 2-column table with 50% width cells and 100% width images, like in README.md
+    const QString md = QStringLiteral(
+        "<table>\n"
+        "<tr>\n"
+        "<td width=\"50%\" valign=\"top\"><img src=\"test.png\" alt=\"left\" width=\"100%\"></td>\n"
+        "<td width=\"50%\" valign=\"top\"><img src=\"test.png\" alt=\"right\" width=\"100%\"></td>\n"
+        "</tr>\n"
+        "</table>\n");
+    view.setMarkdown(md);
+
+    QTRY_VERIFY(view.document()->textWidth() > 0);
+
+    QVector<int> widths;
+    for (QTextBlock block = view.document()->firstBlock(); block.isValid(); block = block.next()) {
+        for (QTextBlock::Iterator it = block.begin(); !it.atEnd(); ++it) {
+            if (it.fragment().charFormat().isImageFormat())
+                widths.append(int(it.fragment().charFormat().toImageFormat().width()));
+        }
+    }
+
+    QCOMPARE(widths.size(), 2);
+    const int colWidth = int(view.document()->textWidth() / 2);
+    for (int w : widths) {
+        QVERIFY2(w > 100, qPrintable(QStringLiteral("image width %1 too small").arg(w)));
+        QVERIFY2(w <= colWidth, qPrintable(QStringLiteral("image width %1 exceeds column width %2").arg(w).arg(colWidth)));
+    }
 }
 
 void ViewTest::codeFramesAreFoundAfterRender()
