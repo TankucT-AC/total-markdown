@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_CORE_FINDSTATE_H
+#define TOTALMARKDOWN_CORE_FINDSTATE_H
 
 #include <QString>
 #include <QVector>
@@ -81,3 +82,5 @@ private:
     QVector<Match> m_matches;
     int m_current = -1;
 };
+
+#endif // TOTALMARKDOWN_CORE_FINDSTATE_H

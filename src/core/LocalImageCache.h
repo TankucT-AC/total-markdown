@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#ifndef TOTALMARKDOWN_LOCALIMAGECACHE_H
-#define TOTALMARKDOWN_LOCALIMAGECACHE_H
+#ifndef TOTALMARKDOWN_CORE_LOCALIMAGECACHE_H
+#define TOTALMARKDOWN_CORE_LOCALIMAGECACHE_H
 
 #include <QHash>
 #include <QImage>
@@ -56,4 +56,4 @@ private:
     QHash<QString, ScaledEntry> m_scaledCache;
 };
 
-#endif // TOTALMARKDOWN_LOCALIMAGECACHE_H
+#endif // TOTALMARKDOWN_CORE_LOCALIMAGECACHE_H

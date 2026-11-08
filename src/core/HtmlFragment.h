@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_CORE_HTMLFRAGMENT_H
+#define TOTALMARKDOWN_CORE_HTMLFRAGMENT_H
 
 #include <QString>
 #include <QVector>
@@ -46,3 +47,5 @@ QString htmlAttribute(const HtmlToken &token, const QString &name);
 
 // True for HTML elements that never have a closing tag (img, br, hr, ...).
 bool isHtmlVoidElement(const QString &name);
+
+#endif // TOTALMARKDOWN_CORE_HTMLFRAGMENT_H

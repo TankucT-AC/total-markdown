@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_APP_SIDEBARTITLEBAR_H
+#define TOTALMARKDOWN_APP_SIDEBARTITLEBAR_H
 
 #include <QWidget>
 
@@ -31,3 +32,5 @@ private:
     QAbstractButton *m_float = nullptr;
     QAbstractButton *m_close = nullptr;
 };
+
+#endif // TOTALMARKDOWN_APP_SIDEBARTITLEBAR_H

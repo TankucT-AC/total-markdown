@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_CORE_THEMEMANAGER_H
+#define TOTALMARKDOWN_CORE_THEMEMANAGER_H
 
 #include "core/Theme.h"
 
@@ -49,3 +50,5 @@ private:
     Mode m_mode = Mode::System;
     ThemeDefinition m_custom = ThemeDefinition::light();
 };
+
+#endif // TOTALMARKDOWN_CORE_THEMEMANAGER_H

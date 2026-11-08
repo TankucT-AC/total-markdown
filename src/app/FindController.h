@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_APP_FINDCONTROLLER_H
+#define TOTALMARKDOWN_APP_FINDCONTROLLER_H
 
 #include "core/FindState.h"
 
@@ -77,3 +78,5 @@ private:
     bool m_editorStale = false;
     bool m_viewerStale = false;
 };
+
+#endif // TOTALMARKDOWN_APP_FINDCONTROLLER_H

@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_CORE_FONTMANAGER_H
+#define TOTALMARKDOWN_CORE_FONTMANAGER_H
 
 #include <QFont>
 #include <QStringList>
@@ -59,3 +60,5 @@ private:
     QString m_customBody;
     QString m_customCode;
 };
+
+#endif // TOTALMARKDOWN_CORE_FONTMANAGER_H

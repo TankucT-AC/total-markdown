@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_APP_FONTSDIALOG_H
+#define TOTALMARKDOWN_APP_FONTSDIALOG_H
 
 #include <QDialog>
 
@@ -30,3 +31,5 @@ private:
     QFontComboBox *m_body = nullptr;
     QFontComboBox *m_code = nullptr;
 };
+
+#endif // TOTALMARKDOWN_APP_FONTSDIALOG_H

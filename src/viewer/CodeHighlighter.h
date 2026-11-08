@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_VIEWER_CODEHIGHLIGHTER_H
+#define TOTALMARKDOWN_VIEWER_CODEHIGHLIGHTER_H
 
 #include "core/Theme.h"
 
@@ -56,3 +57,5 @@ private:
     int m_maxBlockChars = -1;
     int m_maxTotalChars = -1;
 };
+
+#endif // TOTALMARKDOWN_VIEWER_CODEHIGHLIGHTER_H

@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_CORE_FILEDOCUMENT_H
+#define TOTALMARKDOWN_CORE_FILEDOCUMENT_H
 
 #include <QFileSystemWatcher>
 #include <QObject>
@@ -53,3 +54,5 @@ private:
     QString m_content;
     bool m_saving = false;
 };
+
+#endif // TOTALMARKDOWN_CORE_FILEDOCUMENT_H

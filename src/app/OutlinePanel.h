@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_APP_OUTLINEPANEL_H
+#define TOTALMARKDOWN_APP_OUTLINEPANEL_H
 
 #include "core/Outline.h"
 
@@ -48,3 +49,5 @@ private:
     QVector<OutlineEntry> m_entries;
     QHash<int, QTreeWidgetItem *> m_items; // outline index -> row
 };
+
+#endif // TOTALMARKDOWN_APP_OUTLINEPANEL_H

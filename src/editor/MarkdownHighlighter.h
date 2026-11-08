@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_EDITOR_MARKDOWNHIGHLIGHTER_H
+#define TOTALMARKDOWN_EDITOR_MARKDOWNHIGHLIGHTER_H
 
 #include "core/Theme.h"
 
@@ -53,3 +54,5 @@ private:
     QRegularExpression m_listMarker;
     QRegularExpression m_horizontalRule;
 };
+
+#endif // TOTALMARKDOWN_EDITOR_MARKDOWNHIGHLIGHTER_H

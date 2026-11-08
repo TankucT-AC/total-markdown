@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_VIEWER_CHIPOBJECTHANDLER_H
+#define TOTALMARKDOWN_VIEWER_CHIPOBJECTHANDLER_H
 
 #include <QColor>
 #include <QImage>
@@ -40,3 +41,5 @@ private:
     QColor m_border;
     QColor m_text;
 };
+
+#endif // TOTALMARKDOWN_VIEWER_CHIPOBJECTHANDLER_H

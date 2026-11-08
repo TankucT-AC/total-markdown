@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_CORE_OUTLINE_H
+#define TOTALMARKDOWN_CORE_OUTLINE_H
 
 #include <QString>
 #include <QVector>
@@ -39,3 +40,5 @@ public:
     // trusting the pairing.
     static QVector<int> headingSourceLines(const QString &markdown);
 };
+
+#endif // TOTALMARKDOWN_CORE_OUTLINE_H

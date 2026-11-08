@@ -160,7 +160,7 @@ bugs here (unchecked I/O, a `QSyntaxHighlighter` pass after programmatic text,
   four-space indent, 160-column limit). Do not hand-format.
 - **Naming:** Qt style — `MixedCaps` types, `camelCase` members, `m_` prefix for
   private members, no `get` prefix on getters.
-- **Headers:** each file carries the SPDX header, has `#pragma once`, and
+- **Headers:** each file carries the SPDX header, has `#ifndef`-guards, and
   includes what it uses.
 - **Qt idioms:** `std::clamp` over `qBound`, `QStringList` over `QList<QString>`,
   no `Q_ASSERT` as a release-mode null guard, no unbounded `wait()`.

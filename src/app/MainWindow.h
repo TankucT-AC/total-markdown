@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_APP_MAINWINDOW_H
+#define TOTALMARKDOWN_APP_MAINWINDOW_H
 
 #include "core/DocumentLimits.h"
 #include "core/Outline.h"
@@ -141,3 +142,5 @@ private:
     QAction *m_customThemeAction = nullptr;
     QHash<int, QAction *> m_themeModeActions;
 };
+
+#endif // TOTALMARKDOWN_APP_MAINWINDOW_H

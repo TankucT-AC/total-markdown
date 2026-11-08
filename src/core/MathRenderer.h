@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_CORE_MATHRENDERER_H
+#define TOTALMARKDOWN_CORE_MATHRENDERER_H
 
 #include <QColor>
 #include <QHash>
@@ -62,3 +63,5 @@ private:
     int m_maximumWidth = 1024;
     QHash<QString, QImage> m_cache;
 };
+
+#endif // TOTALMARKDOWN_CORE_MATHRENDERER_H

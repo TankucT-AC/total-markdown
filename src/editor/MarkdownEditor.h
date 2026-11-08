@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_EDITOR_MARKDOWNEDITOR_H
+#define TOTALMARKDOWN_EDITOR_MARKDOWNEDITOR_H
 
 #include "core/DocumentLimits.h"
 #include "core/FindState.h"
@@ -99,3 +100,5 @@ private:
     QVector<FindState::Match> m_findMatches;
     int m_findCurrent = -1;
 };
+
+#endif // TOTALMARKDOWN_EDITOR_MARKDOWNEDITOR_H

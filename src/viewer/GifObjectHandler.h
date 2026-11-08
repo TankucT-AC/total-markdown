@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_VIEWER_GIFOBJECTHANDLER_H
+#define TOTALMARKDOWN_VIEWER_GIFOBJECTHANDLER_H
 
 #include <QHash>
 #include <QObject>
@@ -53,3 +54,5 @@ private:
     QHash<QString, QPixmap> m_scaled;
     QHash<QString, QSize> m_scaledSize;
 };
+
+#endif // TOTALMARKDOWN_VIEWER_GIFOBJECTHANDLER_H

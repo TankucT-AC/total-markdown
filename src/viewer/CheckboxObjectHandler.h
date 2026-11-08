@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_VIEWER_CHECKBOXOBJECTHANDLER_H
+#define TOTALMARKDOWN_VIEWER_CHECKBOXOBJECTHANDLER_H
 
 #include <QColor>
 #include <QObject>
@@ -31,3 +32,5 @@ private:
     QColor m_checkedFill;
     QColor m_check;
 };
+
+#endif // TOTALMARKDOWN_VIEWER_CHECKBOXOBJECTHANDLER_H

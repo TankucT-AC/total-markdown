@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_VIEWER_FINDBAR_H
+#define TOTALMARKDOWN_VIEWER_FINDBAR_H
 
 #include <QWidget>
 
@@ -79,3 +80,5 @@ private:
     QToolButton *m_replaceAll = nullptr;
     bool m_replaceEnabled = true;
 };
+
+#endif // TOTALMARKDOWN_VIEWER_FINDBAR_H

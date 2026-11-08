@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_TESTS_TESTHTTPSERVER_H
+#define TOTALMARKDOWN_TESTS_TESTHTTPSERVER_H
 
 #include <QByteArray>
 #include <QHash>
@@ -95,3 +96,5 @@ private:
     QHash<QString, int> m_hits;
     QHash<QTcpSocket *, QByteArray> m_buffers;
 };
+
+#endif // TOTALMARKDOWN_TESTS_TESTHTTPSERVER_H

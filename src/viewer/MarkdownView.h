@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_VIEWER_MARKDOWNVIEW_H
+#define TOTALMARKDOWN_VIEWER_MARKDOWNVIEW_H
 
 #include "core/DocumentLimits.h"
 #include "core/FindState.h"
@@ -231,3 +232,5 @@ private:
     QPoint m_pressPosition;
     bool m_hasPressPosition = false;
 };
+
+#endif // TOTALMARKDOWN_VIEWER_MARKDOWNVIEW_H

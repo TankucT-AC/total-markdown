@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_CORE_MARKDOWNBUILDER_H
+#define TOTALMARKDOWN_CORE_MARKDOWNBUILDER_H
 
 #include "core/FontManager.h"
 #include "core/Theme.h"
@@ -102,3 +103,5 @@ public:
     // dropped. Used to resolve in-document links like "#getting-started".
     static QString headingSlug(const QString &heading);
 };
+
+#endif // TOTALMARKDOWN_CORE_MARKDOWNBUILDER_H

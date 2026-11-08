@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_CORE_DOCUMENTLIMITS_H
+#define TOTALMARKDOWN_CORE_DOCUMENTLIMITS_H
 
 #include <QtGlobal>
 
@@ -86,3 +87,5 @@ private:
     int m_codeHighlightMaxBlockChars = 128 * 1024;
     int m_codeHighlightMaxTotalChars = 1024 * 1024;
 };
+
+#endif // TOTALMARKDOWN_CORE_DOCUMENTLIMITS_H

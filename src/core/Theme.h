@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Total Markdown contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#pragma once
+#ifndef TOTALMARKDOWN_CORE_THEME_H
+#define TOTALMARKDOWN_CORE_THEME_H
 
 #include <QColor>
 #include <QJsonObject>
@@ -71,3 +72,5 @@ struct ThemeDefinition {
     QJsonObject toJson() const;
     static std::optional<ThemeDefinition> fromJson(const QJsonObject &object);
 };
+
+#endif // TOTALMARKDOWN_CORE_THEME_H
